@@ -1,0 +1,65 @@
+/* Contenu pour le fichier src/portals/EtatPortal.css */
+
+.portal-content {
+    padding: 20px;
+    background-color: #f4f7fa;
+}
+
+/* Grille pour les cartes de statistiques (KPIs) */
+.kpi-grid {
+    display: grid;
+    /* Crée des colonnes responsives qui s'adaptent à la taille de l'écran */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+/* Style de chaque carte de statistique */
+.kpi-card {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Style pour la valeur (le chiffre) */
+.kpi-value {
+    font-size: 2.5rem; /* rem est une unité de taille flexible */
+    font-weight: 700;
+    color: #1a2b4d;
+    line-height: 1.2;
+}
+
+/* Style pour le label (le texte sous le chiffre) */
+.kpi-label {
+    font-size: 1rem;
+    color: #6c757d;
+    margin-top: 8px;
+}
+
+/* Grille pour les graphiques */
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr; /* Une seule colonne pour le moment */
+    gap: 20px;
+}
+
+/* Style pour la carte qui contient un graphique */
+.chart-card {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.chart-card h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    text-align: center;
+    color: #343a40;
+}

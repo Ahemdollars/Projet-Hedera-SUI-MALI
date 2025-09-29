@@ -1,0 +1,168 @@
+### =============================================
+### MISSION 9 : Créer un nouveau véhicule
+### =============================================
+POST http://localhost:3001/vehicules
+Content-Type: application/json
+
+{
+    "plaque_immatriculation": "EF 9012 ML",
+    "marque": "Ford",
+    "modele": "Ranger",
+    "annee": 2022,
+    "couleur": "Bleu",
+    "numero_chassis": "CHASSIS-NUM-FORD456"
+}
+
+
+## =============================================
+### MISSION 15 : Créer un véhicule et le logguer sur Hedera
+### =============================================
+POST http://localhost:3001/vehicules
+Content-Type: application/json
+
+{
+    "plaque_immatriculation": "GH 3456 ML",
+    "marque": "Nissan",
+    "modele": "Patrol",
+    "annee": 2021,
+    "couleur": "Gris",
+    "numero_chassis": "CHASSIS-NUM-NISSAN789"
+}
+
+
+### Créer un autre véhicule (Peugeot)
+POST http://localhost:3001/vehicules
+Content-Type: application/json
+
+{
+    "plaque_immatriculation": "JK 7890 ML",
+    "marque": "Peugeot",
+    "modele": "3008",
+    "annee": 2022,
+    "couleur": "Noir",
+    "numero_chassis": "CHASSIS-NUM-PEUGEOT101"
+}
+
+### =============================================
+### MISSION 10 : Consulter un véhicule spécifique
+### =============================================
+GET http://localhost:3001/vehicules/AB 1234 ML
+
+### =============================================
+### MISSION 11.1 : Consulter TOUS les véhicules
+### =============================================
+GET http://localhost:3001/vehicules
+
+### =============================================
+### MISSION 11.2 : Mettre à jour un véhicule
+### =============================================
+PUT http://localhost:3001/vehicules/AB 1234 ML
+Content-Type: application/json
+
+{
+    "couleur": "Rouge",
+    "statut_general": "EN REVISION"
+}
+
+### =============================================
+### MISSION 11.3 : Supprimer un véhicule
+### =============================================
+DELETE http://localhost:3001/vehicules/CD 5678 ML
+
+
+
+### =============================================
+### TESTS POUR LES PROPRIÉTAIRES
+### =============================================
+
+### Créer un nouveau propriétaire
+POST http://localhost:3001/proprietaires
+Content-Type: application/json
+
+{
+    "nom": "Diarra",
+    "prenom": "Fatoumata",
+    "date_naissance": "1995-08-12",
+    "adresse": "Avenue de l'OUA, Bamako",
+    "telephone": "+223 70000002",
+    "email": "fatoumata.diarra@email.ml"
+}
+
+### Consulter TOUS les propriétaires
+GET http://localhost:3001/proprietaires
+
+
+### Consulter le propriétaire avec l'ID 1 (Moussa Traoré)
+GET http://localhost:3001/proprietaires/1
+
+
+### Mettre à jour l'adresse du propriétaire ID 1
+PUT http://localhost:3001/proprietaires/1
+Content-Type: application/json
+
+{
+    "adresse": "Nouveau quartier, Porte 101, Ségou",
+    "telephone": "+223 79999999",
+    "email": "moussa.traore.new@email.ml"
+}
+
+
+### Supprimer le propriétaire avec l'ID 2 (Fatoumata Diarra)
+DELETE http://localhost:3001/proprietaires/2
+
+
+### ====================================================
+### TEST POUR LE MODULE ONT (VERSION AMÉLIORÉE)
+### ====================================================
+
+### L'ONT valide la carte grise du véhicule "AB 1234 ML"
+PUT http://localhost:3001/ont/vehicules/AB 1234 ML/carte-grise
+Content-Type: application/json
+
+{
+    "nouveau_statut": "VALIDE"
+}
+
+
+### L'ONT marque la carte grise du véhicule "CD 5678 ML" comme expirée
+PUT http://localhost:3001/ont/vehicules/CD 5678 ML/carte-grise
+Content-Type: application/json
+
+{
+    "nouveau_statut": "EXPIRÉ"
+}
+
+
+
+### ====================================================
+### TESTS POUR LES AUTRES MODULES
+### ====================================================
+
+### Une agence valide l'assurance du véhicule "AB 1234 ML"
+PUT http://localhost:3001/assurance/vehicules/AB 1234 ML/statut
+Content-Type: application/json
+
+{
+    "nouveau_statut": "VALIDE"
+}
+
+### La Mairie valide la vignette du véhicule "AB 1234 ML"
+PUT http://localhost:3001/mairie/vehicules/AB 1234 ML/vignette
+Content-Type: application/json
+
+{
+    "nouveau_statut": "EXPIRÉ"
+}
+
+### Le MTS valide la visite technique du véhicule "AB 1234 ML"
+PUT http://localhost:3001/mts/vehicules/AB 1234 ML/visite-technique
+Content-Type: application/json
+
+{
+    "nouveau_statut": "VALIDE"
+}
+
+### =============================================
+### TEST POUR LE TABLEAU DE BORD DE L'ÉTAT
+### =============================================
+GET http://localhost:3001/stats

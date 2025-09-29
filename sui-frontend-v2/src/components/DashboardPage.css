@@ -1,0 +1,87 @@
+.dashboard-container {
+  padding: 30px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #333;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 30px;
+  background-color: white;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  
+  /* Astuce pour que l'en-tête prenne toute la largeur */
+  margin: -30px -30px 30px -30px; 
+}
+
+.dashboard-header h1 {
+    font-size: 28px;
+    color: #212529;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 20px; /* Ajoute un espace de 20px entre les éléments */
+}
+
+.user-info span {
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.logout-button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 6px;
+  background-color: #6c757d;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.logout-button:hover {
+  background-color: #5a6268;
+}
+
+.dashboard-content h2 {
+  color: #495057;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.vehicules-table {
+  width: 100%;
+  border-collapse: collapse;
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+  background-color: white;
+  border-radius: 8px;
+  overflow: hidden; /* Pour que le border-radius s'applique aux coins du thead */
+}
+
+.vehicules-table th, .vehicules-table td {
+  border-bottom: 1px solid #dee2e6;
+  padding: 16px;
+  text-align: left;
+}
+
+.vehicules-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  color: #495057;
+}
+
+.vehicules-table tr:hover {
+  background-color: #f1f3f5;
+}
+
+.error-message {
+    color: #dc3545;
+    font-weight: bold;
+}

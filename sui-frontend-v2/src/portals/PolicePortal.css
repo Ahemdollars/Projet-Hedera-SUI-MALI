@@ -1,0 +1,106 @@
+/* Style général pour le portail */
+.portal-container {
+  padding: 30px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: #f4f7f9; /* Fond général un peu plus doux */
+  min-height: 100vh;
+}
+
+.portal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+}
+
+.portal-header h1 {
+    font-size: 28px;
+    color: #2c3e50;
+}
+
+.user-info { display: flex; align-items: center; gap: 20px; }
+.logout-button { padding: 8px 15px; border: none; border-radius: 4px; background-color: #6c757d; color: white; cursor: pointer; }
+
+/* Widget de recherche */
+.search-widget {
+  background-color: white;
+  padding: 25px 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  margin-bottom: 30px;
+}
+
+.search-widget h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #34495e;
+}
+
+.search-widget form { display: flex; gap: 10px; }
+.search-widget input { flex-grow: 1; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+.search-widget button { padding: 12px 20px; border: none; background-color: #007bff; color: white; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px; }
+
+/* Widget des résultats - AMÉLIORÉ */
+.results-widget {
+  background-color: white;
+  padding: 25px 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  color: #34495e; /* Couleur de texte par défaut pour la lisibilité */
+}
+
+.results-widget h3 {
+  margin-top: 0;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.result-grid {
+  display: grid;
+  /* Créer 3 colonnes flexibles */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 30px; /* Espace entre les colonnes */
+}
+
+.result-section h4 {
+  color: #007bff;
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+.result-section p {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.result-section p strong {
+  color: #555;
+  min-width: 120px;
+  display: inline-block;
+}
+
+/* Statuts des documents */
+.status-section p {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status {
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: white;
+}
+
+.status.VALIDE { background-color: #28a745; }
+.status.EXPIRÉ { background-color: #dc3545; }
+.status.MANQUANT { background-color: #ffc107; color: #333; }
+.error-message { color: #dc3545; margin-top: 15px; font-weight: bold; text-align: center; }
+
+.action-buttons { margin-top: 20px; display: flex; gap: 10px; }
+.action-buttons button { padding: 10px 15px; border-radius: 5px; border: none; color: white; cursor: pointer; font-weight: bold; }
+.action-buttons button:not(.danger) { background-color: #28a745; }
+.action-buttons button.danger { background-color: #dc3545; }
