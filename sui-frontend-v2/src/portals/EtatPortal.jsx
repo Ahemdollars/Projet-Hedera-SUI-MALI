@@ -1,11 +1,15 @@
 // Dans src/portals/EtatPortal.jsx
 
-// CORRECTION 1 : Ajout de React, useState et useEffect qui manquaient
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import './EtatPortal.css';
+
+// Définition de l'URL de l'API à partir des variables d'environnement.
+// C'est cette ligne qui permet au code de fonctionner en local ET en production.
+const API_URL = import.meta.env.VITE_API_URL;
+
 // Enregistrement des composants de Chart.js
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -17,7 +21,8 @@ function EtatPortal({ user, onSignOut }) {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const response = await axios.get('http://localhost:3001/stats', {
+                // MODIFICATION : Utilisation de la variable API_URL
+                const response = await axios.get(`${API_URL}/stats`, {
                     // Important : Envoyez le token d'authentification !
                     headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` }
                 });
@@ -44,7 +49,6 @@ function EtatPortal({ user, onSignOut }) {
         labels: ['Douane', 'Mairie (Vignettes)', 'ONT (Cartes Grises)'],
         datasets: [{
             label: 'Revenus en Francs CFA',
-            // CORRECTION 2 : Utilisation de "revenusSimules" et des bonnes clés
             data: [
                 stats.revenusSimules?.douane || 0,
                 stats.revenusSimules?.mairie_vignettes || 0,

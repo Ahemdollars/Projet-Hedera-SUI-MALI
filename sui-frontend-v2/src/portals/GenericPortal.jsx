@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import './PolicePortal.css'; // On peut réutiliser le style du portail de la police
 
-const API_URL = 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Ce composant est un modèle qui reçoit des instructions spécifiques via les "props"
 function GenericPortal({ user, onSignOut, portalName, documentName, apiEndpoint, apiSubPath, statusField }) {

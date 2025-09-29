@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import './DouanePortal.css'; // Nous créerons ce fichier de style
 
-const API_URL = 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL;
 
 function DouanePortal({ user, onSignOut }) {
   // États pour tous les champs du formulaire

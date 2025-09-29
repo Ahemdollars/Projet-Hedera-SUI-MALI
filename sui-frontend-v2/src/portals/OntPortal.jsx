@@ -3,7 +3,7 @@ import axios from 'axios';
 // On peut réutiliser le style du portail de la police
 import './PolicePortal.css'; 
 
-const API_URL = 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL;
 
 function OntPortal({ user, onSignOut }) {
   const [plaque, setPlaque] = useState('');
