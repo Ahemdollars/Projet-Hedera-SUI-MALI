@@ -18,24 +18,37 @@ function App() {
   const checkUser = async () => {
     setLoading(true);
     try {
-    const session = await fetchAuthSession();
-    const currentUser = { username: session.tokens.idToken.payload.username }; 
-    const groups = session.tokens.idToken.payload['cognito:groups'] || [];
+      // 1. Récupérer la session d'authentification
+      const session = await fetchAuthSession();
+      
+      // 2. Extraire les informations utiles
+      const currentUser = { username: session.tokens.idToken.payload.username }; 
+      const groups = session.tokens.idToken.payload['cognito:groups'] || [];
+      const idToken = session.tokens.idToken.toString(); // Récupérer le token lui-même
 
-    // AJOUTEZ CETTE LIGNE EXACTEMENT ICI
-    console.log("LOG DE DÉBOGAGE -- Groupes reçus de Cognito :", groups);
+      // --- AJOUT IMPORTANT ---
+      // 3. Sauvegarder le token dans sessionStorage pour les appels API futurs
+      sessionStorage.setItem('token', idToken);
+      // --- FIN DE L'AJOUT ---
 
-    // Le reste de la logique...
-    if (groups.includes('ETAT')) {
-        setUserRole('ETAT');
-    } else {
-        setUserRole(groups[0]);
-    }
-    setUser(currentUser);
+      console.log("LOG DE DÉBOGAGE -- Groupes reçus de Cognito :", groups);
+
+      // 4. Déterminer le rôle principal
+      if (groups.includes('ETAT')) {
+          setUserRole('ETAT');
+      } else {
+          setUserRole(groups[0]); // Prendre le premier rôle s'il n'est pas 'ETAT'
+      }
+      
+      // 5. Mettre à jour l'état de l'utilisateur
+      setUser(currentUser);
 
     } catch (error) {
+      // En cas d'erreur (pas de session valide), vider les infos et le token
       setUser(null);
       setUserRole(null);
+      sessionStorage.removeItem('token'); // Vider aussi le token en cas d'erreur
+      console.log("Aucune session utilisateur active trouvée."); // Log optionnel
     }
     setLoading(false);
   };

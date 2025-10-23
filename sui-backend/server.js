@@ -10,6 +10,7 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http'); // Module HTTP natif de Node.js
 const { Server } = require("socket.io"); // Librairie pour le temps réel
+const { jwtDecode } = require('jwt-decode'); // Librairie pour décoder les tokens JWT d'AWS Cognito
 
 // Importer nos modules internes
 const pool = require('./db');
@@ -36,6 +37,64 @@ const io = new Server(server, {
 // =============================================
 // ==              MIDDLEWARES                ==
 // =============================================
+
+// =============================================
+// ==        MIDDLEWARE D'AUTORISATION        ==
+// =============================================
+
+/**
+ * Middleware d'autorisation basé sur les rôles AWS Cognito
+ * Vérifie que l'utilisateur authentifié possède au moins un des rôles autorisés
+ * @param {string[]} allowedRoles - Tableau des rôles autorisés (ex: ['Douane', 'Police'])
+ * @returns {Function} - Fonction middleware Express
+ */
+function authorize(allowedRoles) {
+  return async (req, res, next) => {
+    try {
+      // Récupération de l'en-tête Authorization de la requête
+      const authHeader = req.headers.authorization;
+      
+      // Vérification de la présence et du format de l'en-tête Authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ 
+          message: "Token d'authentification manquant ou invalide." 
+        });
+      }
+      
+      // Extraction du token JWT (partie après 'Bearer ')
+      const token = authHeader.substring(7); // Supprime 'Bearer ' du début
+      
+      // Décodage du token JWT pour extraire les informations utilisateur
+      // Utilisation de jwtDecode (destructuré depuis l'import) pour la compatibilité CommonJS
+      const payload = jwtDecode(token);
+      
+      // Extraction des groupes/rôles de l'utilisateur depuis le payload Cognito
+      // Si 'cognito:groups' n'existe pas, on utilise un tableau vide
+      const userGroups = payload['cognito:groups'] || [];
+      
+      // Vérification si l'utilisateur possède au moins un des rôles autorisés
+      // Utilisation de some() pour vérifier si au moins un groupe correspond
+      const hasPermission = userGroups.some(role => allowedRoles.includes(role));
+      
+      if (hasPermission) {
+        // L'utilisateur a les permissions nécessaires, on passe au middleware suivant
+        next();
+      } else {
+        // L'utilisateur n'a pas les permissions requises
+        return res.status(403).json({ 
+          message: "Accès refusé. Rôle non autorisé." 
+        });
+      }
+      
+    } catch (error) {
+      // Gestion des erreurs de décodage du token (token mal formé, expiré, etc.)
+      console.error('Erreur lors du décodage du token JWT:', error.message);
+      return res.status(401).json({ 
+        message: "Token d'authentification invalide ou expiré." 
+      });
+    }
+  };
+}
 
 // Activer CORS pour les requêtes HTTP classiques
 app.use(cors());
@@ -67,10 +126,16 @@ app.get('/', (req, res) => {
   res.json({ message: "Bienvenue sur l'API du SIU Mali !" });
 });
 
-// Créer un nouveau véhicule (F-DOU-01)
-app.post('/vehicules', async (req, res) => {
+// Créer un nouveau véhicule (F-DOU-01) - Accès restreint au rôle 'Douane'
+app.post('/vehicules', authorize(['Douane']), async (req, res) => {
   try {
     const { plaque_immatriculation, marque, modele, annee, couleur, numero_chassis } = req.body;
+    
+    // Validation du format de plaque d'immatriculation selon le format XX-1234-XX
+    const regex = /^[A-Z]{2}-\d{4}-[A-Z]{2}$/;
+    if (!regex.test(plaque_immatriculation)) {
+      return res.status(400).json({ message: "Le format de la plaque d'immatriculation est invalide. Le format attendu est XX-1234-XX." });
+    }
     const newVehicule = await pool.query(
       "INSERT INTO vehicules (plaque_immatriculation, marque, modele, annee, couleur, numero_chassis) VALUES($1, $2, $3, $4, $5, $6) RETURNING *",
       [plaque_immatriculation, marque, modele, annee, couleur, numero_chassis]
@@ -165,10 +230,13 @@ app.delete('/vehicules/:plaque', async (req, res) => {
 // Créer un nouveau propriétaire
 app.post('/proprietaires', async (req, res) => {
   try {
-    const { nom, prenom, date_naissance, adresse, telephone, email } = req.body;
+    // Extraction des champs du body de la requête, incluant les nouveaux champs type_piece_identite et numero_piece_identite
+    const { nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite } = req.body;
+    
+    // Requête SQL mise à jour pour inclure les nouveaux champs type_piece_identite et numero_piece_identite
     const newProprietaire = await pool.query(
-      "INSERT INTO proprietaires (nom, prenom, date_naissance, adresse, telephone, email) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
-      [nom, prenom, date_naissance, adresse, telephone, email]
+      "INSERT INTO proprietaires (nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
+      [nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite]
     );
     res.status(201).json(newProprietaire.rows[0]);
   } catch (err) {
