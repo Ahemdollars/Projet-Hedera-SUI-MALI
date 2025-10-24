@@ -98,6 +98,8 @@
 .status.VALIDE { background-color: #28a745; }
 .status.EXPIRÉ { background-color: #dc3545; }
 .status.MANQUANT { background-color: #ffc107; color: #333; }
+/* Style pour le statut INTERCEPTÉ - badge bleu pour les véhicules interceptés par la police */
+.status.INTERCEPTÉ { background-color: #0d6efd; color: white; }
 .error-message { color: #dc3545; margin-top: 15px; font-weight: bold; text-align: center; }
 
 .action-buttons { margin-top: 20px; display: flex; gap: 10px; }

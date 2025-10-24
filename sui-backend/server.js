@@ -152,16 +152,30 @@ app.post('/vehicules', authorize(['Douane']), async (req, res) => {
 app.get('/vehicules/:plaque', async (req, res) => {
   try {
     const { plaque } = req.params;
+    
+    // Requête SQL complète pour récupérer toutes les informations du véhicule et de son propriétaire
+    // v.* sélectionne TOUTES les colonnes de la table vehicules, incluant :
+    // - Informations de base : plaque_immatriculation, marque, modele, annee, couleur, numero_chassis
+    // - Statuts des documents : statut_carte_grise, statut_assurance, statut_vignette, statut_visite_technique
+    // - Statut police : statut_police (nouveau champ ajouté pour la gestion des véhicules suspects)
+    // - Informations système : id, proprietaire_id, statut_general, date_creation, date_modification
+    // Les informations du propriétaire incluent maintenant les données d'identité et la date d'expiration
     const query = `
       SELECT 
         v.*, 
         p.nom AS proprietaire_nom, 
         p.prenom AS proprietaire_prenom,
-        p.adresse AS proprietaire_adresse
+        p.adresse AS proprietaire_adresse,
+        p.telephone AS proprietaire_telephone,
+        p.email AS proprietaire_email,
+        p.type_piece_identite AS proprietaire_type_piece_identite,
+        p.numero_piece_identite AS proprietaire_numero_piece_identite,
+        p.date_expiration_piece AS proprietaire_date_expiration_piece
       FROM vehicules v
       LEFT JOIN proprietaires p ON v.proprietaire_id = p.id
       WHERE v.plaque_immatriculation = $1
     `;
+    
     const vehicule = await pool.query(query, [plaque]);
     if (vehicule.rows.length === 0) {
       return res.status(404).json({ message: "Véhicule non trouvé" });
@@ -230,13 +244,14 @@ app.delete('/vehicules/:plaque', async (req, res) => {
 // Créer un nouveau propriétaire
 app.post('/proprietaires', async (req, res) => {
   try {
-    // Extraction des champs du body de la requête, incluant les nouveaux champs type_piece_identite et numero_piece_identite
-    const { nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite } = req.body;
+    // Extraction des champs du body de la requête, incluant les champs d'identité et la date d'expiration de la pièce
+    const { nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite, date_expiration_piece } = req.body;
     
-    // Requête SQL mise à jour pour inclure les nouveaux champs type_piece_identite et numero_piece_identite
+    // Requête SQL mise à jour pour inclure tous les champs d'identité et la date d'expiration de la pièce d'identité
+    // La date_expiration_piece peut être NULL si non fournie par le frontend
     const newProprietaire = await pool.query(
-      "INSERT INTO proprietaires (nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
-      [nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite]
+      "INSERT INTO proprietaires (nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite, date_expiration_piece) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
+      [nom, prenom, date_naissance, adresse, telephone, email, type_piece_identite, numero_piece_identite, date_expiration_piece]
     );
     res.status(201).json(newProprietaire.rows[0]);
   } catch (err) {
@@ -308,6 +323,10 @@ app.delete('/proprietaires/:id', async (req, res) => {
 // =====================================================================
 // ==           ROUTES SPÉCIFIQUES AUX MODULES (AVEC TEMPS RÉEL)      ==
 // =====================================================================
+
+// Définition des statuts valides pour les différents modules
+// Statuts valides pour le module Police (gestion des véhicules suspects)
+const validStatutPolice = ['NORMAL', 'VOLÉ', 'EN FUITE', 'INTERCEPTÉ'];
 
 // Module ONT (F-ONT-02)
 app.put('/ont/vehicules/:plaque/carte-grise', async (req, res) => {
@@ -391,6 +410,78 @@ app.put('/mts/vehicules/:plaque/visite-technique', async (req, res) => {
 
     res.json({ message: `Statut de la visite technique mis à jour à '${nouveau_statut}'`, vehicule: update.rows[0] });
   } catch (err) { console.error(err.message); res.status(500).send("Erreur du serveur"); }
+});
+
+// Module Police (F-POL-02) - Gestion des statuts de véhicules suspects
+// Route sécurisée pour les utilisateurs avec le rôle 'Police' uniquement
+app.put('/police/vehicules/:plaque/statut-police', authorize(['Police']), async (req, res) => {
+  try {
+    // Extraction de la plaque d'immatriculation depuis les paramètres de l'URL
+    const { plaque } = req.params;
+    
+    // Extraction du nouveau statut depuis le corps de la requête
+    const { nouveau_statut } = req.body;
+    
+    // Validation du statut reçu contre la liste des statuts autorisés pour la Police
+    if (!validStatutPolice.includes(nouveau_statut)) {
+      return res.status(400).json({ 
+        message: "Statut non valide. Les statuts autorisés sont : NORMAL, VOLÉ, EN FUITE, INTERCEPTÉ." 
+      });
+    }
+    
+    // Mise à jour du statut police dans la base de données
+    // Met à jour la colonne statut_police et la date de modification
+    const update = await pool.query(
+      "UPDATE vehicules SET statut_police = $1, date_modification = CURRENT_TIMESTAMP WHERE plaque_immatriculation = $2 RETURNING *",
+      [nouveau_statut, plaque]
+    );
+    
+    // Vérification que le véhicule existe et a été mis à jour
+    if (update.rows.length === 0) {
+      return res.status(404).json({ message: "Véhicule non trouvé" });
+    }
+    
+    // Requête SELECT complète pour récupérer toutes les informations du véhicule et de son propriétaire
+    // Cette requête est identique à celle de GET /vehicules/:plaque pour assurer la cohérence des données
+    // Elle inclut toutes les colonnes de vehicules (v.*) et les informations complètes du propriétaire
+    const selectQuery = `
+      SELECT 
+        v.*, 
+        p.nom AS proprietaire_nom, 
+        p.prenom AS proprietaire_prenom,
+        p.adresse AS proprietaire_adresse,
+        p.telephone AS proprietaire_telephone,
+        p.email AS proprietaire_email,
+        p.type_piece_identite AS proprietaire_type_piece_identite,
+        p.numero_piece_identite AS proprietaire_numero_piece_identite,
+        p.date_expiration_piece AS proprietaire_date_expiration_piece
+      FROM vehicules v
+      LEFT JOIN proprietaires p ON v.proprietaire_id = p.id
+      WHERE v.plaque_immatriculation = $1
+    `;
+    
+    // Exécution de la requête SELECT pour récupérer les informations complètes
+    const selectResult = await pool.query(selectQuery, [plaque]);
+    
+    // Émission d'un événement temps réel pour notifier tous les clients connectés
+    // Permet aux autres modules (État, Douane, etc.) de voir les changements en temps réel
+    req.io.emit('vehicle_updated', { plaque: plaque });
+    
+    // Enregistrement de l'action sur la blockchain Hedera pour audit et traçabilité
+    await logAction(`STATUT_POLICE_UPDATE: Plaque=${plaque}, Statut=${nouveau_statut}`);
+    
+    // Retour d'une réponse de succès avec les informations complètes du véhicule et de son propriétaire
+    // Utilise selectResult.rows[0] au lieu de update.rows[0] pour inclure les données du propriétaire
+    res.json({ 
+      message: `Statut police mis à jour à '${nouveau_statut}' pour le véhicule ${plaque}`, 
+      vehicule: selectResult.rows[0] 
+    });
+    
+  } catch (err) { 
+    // Gestion des erreurs inattendues avec logging pour debugging
+    console.error('Erreur lors de la mise à jour du statut police:', err.message); 
+    res.status(500).send("Erreur du serveur lors de la mise à jour du statut police"); 
+  }
 });
 
 

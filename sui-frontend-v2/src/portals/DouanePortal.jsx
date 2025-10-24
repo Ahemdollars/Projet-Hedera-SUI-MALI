@@ -12,6 +12,7 @@ function DouanePortal({ user, onSignOut }) {
     prop_adresse: '',
     prop_type_piece: 'Passeport', // Type de pièce d'identité par défaut
     prop_numero_piece: '', // Numéro de la pièce d'identité
+    prop_date_expiration_piece: '', // Date d'expiration de la pièce d'identité
     veh_plaque: '',
     veh_marque: '',
     veh_modele: '',
@@ -57,7 +58,8 @@ function DouanePortal({ user, onSignOut }) {
         prenom: formData.prop_prenom,
         adresse: formData.prop_adresse,
         type_piece_identite: formData.prop_type_piece,
-        numero_piece_identite: formData.prop_numero_piece
+        numero_piece_identite: formData.prop_numero_piece,
+        date_expiration_piece: formData.prop_date_expiration_piece || null
       }, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -133,6 +135,15 @@ function DouanePortal({ user, onSignOut }) {
                 onChange={handleChange} 
                 placeholder="Numéro de la pièce" 
                 required 
+              />
+              
+              {/* Nouveau champ pour la date d'expiration de la pièce d'identité */}
+              <label>Date d'expiration pièce :</label>
+              <input 
+                name="prop_date_expiration_piece" 
+                type="date" 
+                value={formData.prop_date_expiration_piece} 
+                onChange={handleChange} 
               />
             </div>
             <div className="form-section">
