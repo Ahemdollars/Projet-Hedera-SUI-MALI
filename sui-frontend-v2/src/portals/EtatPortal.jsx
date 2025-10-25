@@ -2,16 +2,16 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Bar } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { Doughnut, Line } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Title, Tooltip, Legend } from 'chart.js';
 import './EtatPortal.css';
 
 // Définition de l'URL de l'API à partir des variables d'environnement.
 // C'est cette ligne qui permet au code de fonctionner en local ET en production.
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Enregistrement des composants de Chart.js
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+// Enregistrement des composants de Chart.js pour les graphiques en donut et linéaires
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Title, Tooltip, Legend);
 
 
 function EtatPortal({ user, onSignOut }) {
@@ -87,21 +87,87 @@ function EtatPortal({ user, onSignOut }) {
         return <div>Impossible de charger les statistiques.</div>;
     }
 
-    // Préparation des données pour le graphique des revenus par service
+    // Préparation des données pour le graphique en donut des revenus par service
     // MIGRATION : Passage de stats.revenusSimules vers stats.revenusReels
     // Les revenus réels sont maintenant calculés directement depuis la base de données
+    
+    // ✅ SERVICES MAINTENANT INCLUS - MISE À JOUR TERMINÉE ✅
+    // Les services suivants sont maintenant inclus dans le graphique des revenus :
+    // - "ONT (Cartes Grises)" : présent et fonctionnel
+    // - "Assurance" : AJOUTÉ - utilise stats.revenusReels.assurance
+    // - "MTS" : AJOUTÉ - utilise stats.revenusReels.mts
+    // Le backend doit fournir ces données via stats.revenusReels.assurance et stats.revenusReels.mts
+    
     const revenusData = {
-        labels: ['Douane', 'Mairie (Vignettes)', 'ONT (Cartes Grises)'],
+        labels: ['Douane', 'Mairie (Vignettes)', 'ONT (Cartes Grises)', 'Assurance', 'MTS'],
         datasets: [{
             label: 'Revenus en Francs CFA',
             // NOUVELLE STRUCTURE : Utilisation de stats.revenusReels avec les clés simplifiées
             data: [
                 stats.revenusReels?.douane || 0,        // Revenus réels de la douane (importations)
                 stats.revenusReels?.mairie || 0,       // Revenus réels de la mairie (vignettes)
-                stats.revenusReels?.ont || 0           // Revenus réels de l'ONT (cartes grises)
+                stats.revenusReels?.ont || 0,          // Revenus réels de l'ONT (cartes grises)
+                stats.revenusReels?.assurance || 0,    // Revenus réels de l'Assurance
+                stats.revenusReels?.mts || 0           // Revenus réels de MTS
             ],
-            backgroundColor: ['#3e95cd', '#8e5ea2', '#3cba9f'], // Couleurs distinctes par service
+            // Palette de couleurs optimisée pour un graphique en donut
+            backgroundColor: [
+                '#3e95cd', // Bleu pour la Douane
+                '#8e5ea2', // Violet pour la Mairie
+                '#3cba9f', // Vert pour l'ONT
+                '#ff6b35', // Orange pour l'Assurance
+                '#ffc107'  // Jaune pour MTS
+            ],
+            borderColor: [
+                '#2c7be5', // Bordure bleue plus foncée
+                '#6f42c1', // Bordure violette plus foncée
+                '#28a745', // Bordure verte plus foncée
+                '#e55a2b', // Bordure orange plus foncée
+                '#e0a800'  // Bordure jaune plus foncée
+            ],
+            borderWidth: 2 // Épaisseur de la bordure pour le donut
         }],
+    };
+
+    // Préparation des données pour le graphique linéaire de tendance des revenus
+    // NOUVELLE FONCTIONNALITÉ : Affichage de l'évolution des revenus dans le temps
+    const tendanceRevenusChartData = {
+        labels: stats?.tendanceRevenusData?.labels || [], // Les dates en abscisse
+        datasets: [{
+            label: 'Revenus Journaliers (FCFA)',
+            data: stats?.tendanceRevenusData?.data || [], // Les montants en ordonnée
+            fill: false, // Ne pas remplir sous la ligne
+            borderColor: 'rgb(75, 192, 192)', // Couleur de la ligne (turquoise)
+            backgroundColor: 'rgba(75, 192, 192, 0.1)', // Couleur de fond légère
+            tension: 0.1, // Un peu de courbure pour une ligne plus fluide
+            pointBackgroundColor: 'rgb(75, 192, 192)', // Couleur des points
+            pointBorderColor: '#fff', // Bordure blanche des points
+            pointBorderWidth: 2, // Épaisseur de la bordure des points
+            pointRadius: 4 // Taille des points
+        }]
+    };
+
+    // Préparation des données pour le graphique circulaire de répartition des statuts police
+    // NOUVELLE FONCTIONNALITÉ : Visualisation des différents statuts des véhicules (NORMAL, VOLÉ, EN FUITE, INTERCEPTÉ)
+    const repartitionStatutPoliceChartData = {
+        labels: stats?.repartitionStatutPoliceData?.labels || [], // Les statuts (NORMAL, VOLÉ...)
+        datasets: [{
+            label: 'Nombre de Véhicules',
+            data: stats?.repartitionStatutPoliceData?.data || [], // Les comptages
+            backgroundColor: [ // Palette de couleurs suggérée
+                'rgba(40, 167, 69, 0.7)',  // Vert pour NORMAL
+                'rgba(220, 53, 69, 0.7)',   // Rouge pour VOLÉ
+                'rgba(255, 193, 7, 0.7)',   // Jaune pour EN FUITE
+                'rgba(13, 110, 253, 0.7)',  // Bleu pour INTERCEPTÉ
+            ],
+            borderColor: [ // Bordures pour séparer les sections
+                'rgba(255, 255, 255, 1)',
+                'rgba(255, 255, 255, 1)',
+                'rgba(255, 255, 255, 1)',
+                'rgba(255, 255, 255, 1)'
+            ],
+            borderWidth: 1 // Épaisseur de la bordure pour séparer les sections
+        }]
     };
 
     return (
@@ -195,7 +261,7 @@ function EtatPortal({ user, onSignOut }) {
                     
                     {/* Nouvelle carte KPI pour les véhicules signalés (Volés ou En Fuite) */}
                     <div className="kpi-card">
-                        <span className="kpi-value">{stats.vehiculesSignales || 0}</span>
+                        <span className="kpi-value">{stats?.vehiculesSignales}</span>
                         <span className="kpi-label">Véhicules Signalés</span>
                     </div>
                 </div>
@@ -204,9 +270,28 @@ function EtatPortal({ user, onSignOut }) {
                 <div className="charts-grid">
                     <div className="chart-card">
                         <h3>Répartition des Revenus par Service</h3>
-                        <Bar data={revenusData} />
+                        {/* MODIFICATION : Passage du graphique à barres vers un graphique en donut */}
+                        {/* CONTENEUR POUR LIMITER LA TAILLE : Le graphique est maintenant limité à 400px max */}
+                        <div style={{ maxWidth: '400px', maxHeight: '400px', margin: 'auto' }}>
+                            <Doughnut data={revenusData} />
+                        </div>
                     </div>
-                    {/* Ajoutez d'autres graphiques ici si nécessaire */}
+                    
+                    {/* NOUVEAU GRAPHIQUE : Tendance des revenus dans le temps */}
+                    <div className="chart-card">
+                        <h3>Tendance des Revenus</h3>
+                        {/* Graphique linéaire pour visualiser l'évolution des revenus journaliers */}
+                        <Line data={tendanceRevenusChartData} />
+                    </div>
+                    
+                    {/* NOUVEAU GRAPHIQUE : Répartition des statuts police */}
+                    <div className="chart-card">
+                        <h3>Répartition des Statuts Police</h3>
+                        {/* Graphique circulaire pour visualiser la répartition des statuts des véhicules */}
+                        <div style={{ maxWidth: '350px', maxHeight: '350px', margin: 'auto' }}>
+                            <Doughnut data={repartitionStatutPoliceChartData} />
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>

@@ -405,6 +405,35 @@ app.put('/assurance/vehicules/:plaque/statut', async (req, res) => {
     );
     if (update.rows.length === 0) return res.status(404).json({ message: "Véhicule non trouvé" });
 
+    // =============================================
+    // ==     GESTION DES PAIEMENTS ASSURANCE    ==
+    // =============================================
+    // Enregistrement d'un paiement uniquement si le statut passe à 'VALIDE'
+    // Un paiement est généré automatiquement quand l'Assurance valide un véhicule
+    if (nouveau_statut === 'VALIDE') {
+      try {
+        // Récupération du prix de l'assurance depuis la table parametres
+        const resultPrix = await pool.query(
+          "SELECT param_valeur FROM parametres WHERE param_nom = 'prix_assurance'"
+        );
+        
+        // Conversion du prix en entier pour le calcul des montants
+        // Utilisation de 10000 comme valeur par défaut si le paramètre n'existe pas
+        const montantAssurance = resultPrix.rows.length > 0 ? 
+          parseInt(resultPrix.rows[0].param_valeur) : 10000;
+        
+        // Enregistrement automatique du paiement dans la table paiements
+        // Service='Assurance', montant récupéré depuis parametres, plaque du véhicule
+        await pool.query(
+          "INSERT INTO paiements (service, montant, vehicule_plaque) VALUES ($1, $2, $3)",
+          ['Assurance', montantAssurance, plaque]
+        );
+      } catch (err) {
+        console.error('Erreur lors de l\'enregistrement du paiement assurance:', err.message);
+        // Ne pas faire échouer la requête principale si l'enregistrement du paiement échoue
+      }
+    }
+
     req.io.emit('vehicle_updated', { plaque: plaque });
     await logAction(`ASSURANCE_UPDATE: Plaque=${plaque}, Statut=${nouveau_statut}`);
 
@@ -468,6 +497,35 @@ app.put('/mts/vehicules/:plaque/visite-technique', async (req, res) => {
       [nouveau_statut, plaque]
     );
     if (update.rows.length === 0) return res.status(404).json({ message: "Véhicule non trouvé" });
+
+    // =============================================
+    // ==      GESTION DES PAIEMENTS MTS         ==
+    // =============================================
+    // Enregistrement d'un paiement uniquement si le statut passe à 'VALIDE'
+    // Un paiement est généré automatiquement quand le MTS valide une visite technique
+    if (nouveau_statut === 'VALIDE') {
+      try {
+        // Récupération du prix de la visite technique depuis la table parametres
+        const resultPrix = await pool.query(
+          "SELECT param_valeur FROM parametres WHERE param_nom = 'prix_mts'"
+        );
+        
+        // Conversion du prix en entier pour le calcul des montants
+        // Utilisation de 10000 comme valeur par défaut si le paramètre n'existe pas
+        const montantMTS = resultPrix.rows.length > 0 ? 
+          parseInt(resultPrix.rows[0].param_valeur) : 10000;
+        
+        // Enregistrement automatique du paiement dans la table paiements
+        // Service='MTS', montant récupéré depuis parametres, plaque du véhicule
+        await pool.query(
+          "INSERT INTO paiements (service, montant, vehicule_plaque) VALUES ($1, $2, $3)",
+          ['MTS', montantMTS, plaque]
+        );
+      } catch (err) {
+        console.error('Erreur lors de l\'enregistrement du paiement MTS:', err.message);
+        // Ne pas faire échouer la requête principale si l'enregistrement du paiement échoue
+      }
+    }
 
     req.io.emit('vehicle_updated', { plaque: plaque });
     await logAction(`VISITE_TECHNIQUE_UPDATE: Plaque=${plaque}, Statut=${nouveau_statut}`);
@@ -599,7 +657,9 @@ app.get('/stats', async (req, res) => {
             vehiculesAJourRes,
             citoyensAJourRes,
             revenusRes,
-            vehiculesSignalesRes
+            vehiculesSignalesRes,
+            tendanceRevenusRes,
+            repartitionStatutPoliceRes
         ] = await Promise.all([
             // Comptage des véhicules avec filtrage par date de création
             // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
@@ -657,9 +717,47 @@ app.get('/stats', async (req, res) => {
             // ==      COMPTAGE DES VÉHICULES SIGNALÉS  ==
             // =============================================
             // Comptage des véhicules signalés par la police (VOLÉ ou EN FUITE)
+            // IMPORTANT : Cette requête n'est PAS filtrée par les dates debut/fin
+            // car nous voulons le nombre ACTUEL de véhicules signalés, peu importe
+            // quand ils ont été enregistrés dans le système
             // Nouveau KPI pour le tableau de bord : indicateur de sécurité routière
             pool.query(
                 "SELECT COUNT(*) FROM vehicules WHERE statut_police = 'VOLÉ' OR statut_police = 'EN FUITE'"
+            ),
+            // =============================================
+            // ==      TENDANCE DES REVENUS PAR JOUR   ==
+            // =============================================
+            // Calcul de la somme des revenus par jour pour le graphique de tendance
+            // Utilise date_trunc pour regrouper par jour et applique les filtres de période
+            // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
+            pool.query(
+                `SELECT 
+                    date_trunc('day', date_paiement)::DATE AS jour, 
+                    SUM(montant) AS total_jour
+                FROM paiements
+                WHERE 
+                    ($1::DATE IS NULL OR date_paiement >= $1::DATE) 
+                AND ($2::DATE IS NULL OR date_paiement < ($2::DATE + INTERVAL '1 day'))
+                GROUP BY date_trunc('day', date_paiement)
+                ORDER BY jour ASC`,
+                [debutFormate, finFormate]
+            ),
+            // =============================================
+            // ==      RÉPARTITION DES STATUTS POLICE   ==
+            // =============================================
+            // Comptage des véhicules par statut_police pour le graphique de répartition
+            // Applique les filtres de période sur date_creation et groupe par statut_police
+            // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
+            pool.query(
+                `SELECT 
+                    statut_police, 
+                    COUNT(*) AS count
+                FROM vehicules
+                WHERE 
+                    ($1::DATE IS NULL OR date_creation >= $1::DATE) 
+                AND ($2::DATE IS NULL OR date_creation < ($2::DATE + INTERVAL '1 day'))
+                GROUP BY statut_police`,
+                [debutFormate, finFormate]
             )
         ]);
 
@@ -668,10 +766,13 @@ app.get('/stats', async (req, res) => {
         // =============================================
         // Construction de l'objet des revenus réels depuis la base de données
         // Initialisation avec des valeurs par défaut à 0 pour tous les services
+        // Ajout des nouveaux services Assurance et MTS
         const revenusReels = {
             douane: 0,
             ont: 0,
-            mairie: 0
+            mairie: 0,
+            assurance: 0,
+            mts: 0
         };
         
         // Population de l'objet revenusReels avec les données réelles de la table paiements
@@ -684,7 +785,50 @@ app.get('/stats', async (req, res) => {
                 revenusReels.ont = parseInt(row.total);
             } else if (serviceKey === 'mairie') {
                 revenusReels.mairie = parseInt(row.total);
+            } else if (serviceKey === 'assurance') {
+                revenusReels.assurance = parseInt(row.total);
+            } else if (serviceKey === 'mts') {
+                revenusReels.mts = parseInt(row.total);
             }
+        });
+
+        // =============================================
+        // ==      FORMATAGE DES DONNÉES DE TENDANCE  ==
+        // =============================================
+        // Formatage des données de tendance des revenus pour Chart.js
+        // Création des tableaux labels (dates) et data (montants) pour le graphique
+        const tendanceRevenusData = {
+            labels: [],
+            data: []
+        };
+        
+        // Boucle sur les résultats de la requête de tendance des revenus
+        // Formatage des dates en 'YYYY-MM-DD' et des montants en entiers
+        tendanceRevenusRes.rows.forEach(row => {
+            // Formatage de la date au format 'YYYY-MM-DD' pour Chart.js
+            const dateFormatee = new Date(row.jour).toISOString().split('T')[0];
+            tendanceRevenusData.labels.push(dateFormatee);
+            // Conversion du montant en entier pour éviter les décimales
+            tendanceRevenusData.data.push(parseInt(row.total_jour));
+        });
+
+        // =============================================
+        // ==      FORMATAGE DES DONNÉES DE RÉPARTITION ==
+        // =============================================
+        // Formatage des données de répartition des statuts police pour Chart.js
+        // Création des tableaux labels (statuts) et data (comptages) pour le graphique
+        const repartitionStatutPoliceData = {
+            labels: [],
+            data: []
+        };
+        
+        // Boucle sur les résultats de la requête de répartition des statuts police
+        // Formatage des statuts et des comptages pour le graphique en secteurs
+        repartitionStatutPoliceRes.rows.forEach(row => {
+            // Ajout du statut police comme label
+            repartitionStatutPoliceData.labels.push(row.statut_police);
+            // Conversion du comptage en entier
+            repartitionStatutPoliceData.data.push(parseInt(row.count));
         });
 
         const stats = {
@@ -695,8 +839,9 @@ app.get('/stats', async (req, res) => {
             // =============================================
             // ==      NOUVEAU KPI : VÉHICULES SIGNALÉS  ==
             // =============================================
-            // Indicateur de sécurité routière : nombre de véhicules signalés par la police
+            // Indicateur de sécurité routière : nombre ACTUEL de véhicules signalés par la police
             // Compte les véhicules avec statut_police = 'VOLÉ' ou 'EN FUITE'
+            // Ce KPI n'est PAS filtré par les dates car il représente l'état actuel du système
             vehiculesSignales: parseInt(vehiculesSignalesRes.rows[0].count),
             conformiteDocuments: {
                 carteGrise: parseInt(statutsRes.rows[0].carte_grise_valide),
@@ -704,7 +849,19 @@ app.get('/stats', async (req, res) => {
                 vignette: parseInt(statutsRes.rows[0].vignette_valide),
                 visiteTechnique: parseInt(statutsRes.rows[0].visite_valide),
             },
-            revenusReels: revenusReels
+            revenusReels: revenusReels,
+            // =============================================
+            // ==      DONNÉES DE TENDANCE DES REVENUS  ==
+            // =============================================
+            // Données formatées pour le graphique de tendance des revenus par jour
+            // Compatible avec Chart.js : labels (dates) et data (montants)
+            tendanceRevenusData: tendanceRevenusData,
+            // =============================================
+            // ==      RÉPARTITION DES STATUTS POLICE   ==
+            // =============================================
+            // Données formatées pour le graphique de répartition des statuts police
+            // Compatible avec Chart.js : labels (statuts) et data (comptages)
+            repartitionStatutPoliceData: repartitionStatutPoliceData
         };
 
         res.json(stats);
