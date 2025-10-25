@@ -140,6 +140,26 @@ app.post('/vehicules', authorize(['Douane']), async (req, res) => {
       "INSERT INTO vehicules (plaque_immatriculation, marque, modele, annee, couleur, numero_chassis) VALUES($1, $2, $3, $4, $5, $6) RETURNING *",
       [plaque_immatriculation, marque, modele, annee, couleur, numero_chassis]
     );
+    
+    // =============================================
+    // ==        GESTION DES PAIEMENTS DOUANE     ==
+    // =============================================
+    // Récupération du prix de la douane depuis la table parametres
+    // Ce prix est utilisé pour enregistrer automatiquement un paiement lors de la création d'un véhicule
+    const resultPrix = await pool.query(
+      "SELECT param_valeur FROM parametres WHERE param_nom = 'prix_douane'"
+    );
+    
+    // Conversion du prix en entier pour le calcul des montants
+    const montantDouane = parseInt(resultPrix.rows[0].param_valeur);
+    
+    // Enregistrement automatique du paiement dans la table paiements
+    // Service='Douane', montant récupéré depuis parametres, plaque du véhicule créé
+    await pool.query(
+      "INSERT INTO paiements (service, montant, vehicule_plaque) VALUES ($1, $2, $3)",
+      ['Douane', montantDouane, plaque_immatriculation]
+    );
+    
     await logAction(`VEHICULE_CREE: Plaque=${plaque_immatriculation}, Marque=${marque}`);
     res.status(201).json(newVehicule.rows[0]);
   } catch (err) {
@@ -342,6 +362,28 @@ app.put('/ont/vehicules/:plaque/carte-grise', async (req, res) => {
     );
     if (update.rows.length === 0) return res.status(404).json({ message: "Véhicule non trouvé" });
     
+    // =============================================
+    // ==      GESTION DES PAIEMENTS ONT          ==
+    // =============================================
+    // Enregistrement d'un paiement uniquement si le statut passe à 'VALIDE'
+    // Un paiement est généré automatiquement quand l'ONT valide une carte grise
+    if (nouveau_statut === 'VALIDE') {
+      // Récupération du prix de la carte grise depuis la table parametres
+      const resultPrix = await pool.query(
+        "SELECT param_valeur FROM parametres WHERE param_nom = 'prix_carte_grise'"
+      );
+      
+      // Conversion du prix en entier pour le calcul des montants
+      const montantCarteGrise = parseInt(resultPrix.rows[0].param_valeur);
+      
+      // Enregistrement automatique du paiement dans la table paiements
+      // Service='ONT', montant récupéré depuis parametres, plaque du véhicule
+      await pool.query(
+        "INSERT INTO paiements (service, montant, vehicule_plaque) VALUES ($1, $2, $3)",
+        ['ONT', montantCarteGrise, plaque]
+      );
+    }
+    
     req.io.emit('vehicle_updated', { plaque: plaque });
     await logAction(`CARTE_GRISE_UPDATE: Plaque=${plaque}, Statut=${nouveau_statut}`);
     
@@ -383,6 +425,28 @@ app.put('/mairie/vehicules/:plaque/vignette', async (req, res) => {
       [nouveau_statut, plaque]
     );
     if (update.rows.length === 0) return res.status(404).json({ message: "Véhicule non trouvé" });
+
+    // =============================================
+    // ==     GESTION DES PAIEMENTS MAIRIE       ==
+    // =============================================
+    // Enregistrement d'un paiement uniquement si le statut passe à 'VALIDE'
+    // Un paiement est généré automatiquement quand la Mairie valide une vignette
+    if (nouveau_statut === 'VALIDE') {
+      // Récupération du prix de la vignette depuis la table parametres
+      const resultPrix = await pool.query(
+        "SELECT param_valeur FROM parametres WHERE param_nom = 'prix_vignette'"
+      );
+      
+      // Conversion du prix en entier pour le calcul des montants
+      const montantVignette = parseInt(resultPrix.rows[0].param_valeur);
+      
+      // Enregistrement automatique du paiement dans la table paiements
+      // Service='Mairie', montant récupéré depuis parametres, plaque du véhicule
+      await pool.query(
+        "INSERT INTO paiements (service, montant, vehicule_plaque) VALUES ($1, $2, $3)",
+        ['Mairie', montantVignette, plaque]
+      );
+    }
 
     req.io.emit('vehicle_updated', { plaque: plaque });
     await logAction(`VIGNETTE_UPDATE: Plaque=${plaque}, Statut=${nouveau_statut}`);
@@ -500,54 +564,147 @@ app.put('/police/vehicules/:plaque/statut-police', authorize(['Police']), async 
 
 app.get('/stats', async (req, res) => {
     try {
+        // =============================================
+        // ==      RÉCUPÉRATION DES PARAMÈTRES      ==
+        // =============================================
+        // Récupération des paramètres de filtrage par période depuis la requête
+        // Les paramètres debut et fin sont optionnels et au format 'YYYY-MM-DD'
+        const { debut, fin } = req.query;
+        
+        // =============================================
+        // ==      VÉRIFICATION ET CORRECTION DES DATES ==
+        // =============================================
+        // Debug : Vérification du type et de la valeur des dates reçues
+        console.log('Type date debut reçue:', typeof debut, 'Valeur:', debut);
+        console.log('Type date fin reçue:', typeof fin, 'Valeur:', fin);
+        
+        // Correction du format des dates pour éviter l'erreur "invalid input syntax for type date"
+        // S'assurer que debut et fin sont des chaînes de caractères valides ou null
+        const debutFormate = (debut && typeof debut === 'string') ? debut : null;
+        const finFormate = (fin && typeof fin === 'string') ? fin : null;
+        
+        // Debug : Vérification des dates formatées
+        console.log('Date debut formatée:', debutFormate);
+        console.log('Date fin formatée:', finFormate);
+        
+        // =============================================
+        // ==      CALCUL DES STATISTIQUES          ==
+        // =============================================
+        // Exécution de toutes les requêtes en parallèle avec filtrage par période
+        // Utilisation de conditions dans WHERE pour gérer les cas où les dates ne sont pas fournies
         const [
             totalVehiculesRes,
             totalProprietairesRes,
             statutsRes,
             vehiculesAJourRes,
-            citoyensAJourRes
+            citoyensAJourRes,
+            revenusRes,
+            vehiculesSignalesRes
         ] = await Promise.all([
-            pool.query("SELECT COUNT(*) FROM vehicules"),
-            pool.query("SELECT COUNT(*) FROM proprietaires"),
+            // Comptage des véhicules avec filtrage par date de création
+            // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
+            pool.query(
+                "SELECT COUNT(*) FROM vehicules WHERE ($1::DATE IS NULL OR date_creation >= $1::DATE) AND ($2::DATE IS NULL OR date_creation < ($2::DATE + INTERVAL '1 day'))",
+                [debutFormate, finFormate]
+            ),
+            // Comptage des propriétaires avec filtrage par date de création
+            // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
+            pool.query(
+                "SELECT COUNT(*) FROM proprietaires WHERE ($1::DATE IS NULL OR date_creation >= $1::DATE) AND ($2::DATE IS NULL OR date_creation < ($2::DATE + INTERVAL '1 day'))",
+                [debutFormate, finFormate]
+            ),
+            // Calcul des statuts des documents avec filtrage par date de création des véhicules
+            // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
             pool.query(
                 `SELECT 
-                    (SELECT COUNT(*) FROM vehicules WHERE statut_carte_grise = 'VALIDE') as carte_grise_valide,
-                    (SELECT COUNT(*) FROM vehicules WHERE statut_assurance = 'VALIDE') as assurance_valide,
-                    (SELECT COUNT(*) FROM vehicules WHERE statut_vignette = 'EXPIRÉ') as vignette_valide, -- CORRECTION FINALE
-                    (SELECT COUNT(*) FROM vehicules WHERE statut_visite_technique = 'VALIDE') as visite_valide`
+                    (SELECT COUNT(*) FROM vehicules WHERE statut_carte_grise = 'VALIDE' AND ($1::DATE IS NULL OR date_creation >= $1::DATE) AND ($2::DATE IS NULL OR date_creation < ($2::DATE + INTERVAL '1 day'))) as carte_grise_valide,
+                    (SELECT COUNT(*) FROM vehicules WHERE statut_assurance = 'VALIDE' AND ($1::DATE IS NULL OR date_creation >= $1::DATE) AND ($2::DATE IS NULL OR date_creation < ($2::DATE + INTERVAL '1 day'))) as assurance_valide,
+                    (SELECT COUNT(*) FROM vehicules WHERE statut_vignette = 'EXPIRÉ' AND ($1::DATE IS NULL OR date_creation >= $1::DATE) AND ($2::DATE IS NULL OR date_creation < ($2::DATE + INTERVAL '1 day'))) as vignette_valide,
+                    (SELECT COUNT(*) FROM vehicules WHERE statut_visite_technique = 'VALIDE' AND ($1::DATE IS NULL OR date_creation >= $1::DATE) AND ($2::DATE IS NULL OR date_creation < ($2::DATE + INTERVAL '1 day'))) as visite_valide`,
+                [debutFormate, finFormate]
             ),
+            // Comptage des véhicules à jour avec filtrage par date de création
+            // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
             pool.query(
                 `SELECT COUNT(*) FROM vehicules 
                  WHERE statut_assurance = 'VALIDE' 
-                 AND statut_vignette = 'EXPIRÉ' -- CORRECTION FINALE
-                 AND statut_visite_technique = 'VALIDE';`
+                 AND statut_vignette = 'EXPIRÉ'
+                 AND statut_visite_technique = 'VALIDE'
+                 AND ($1::DATE IS NULL OR date_creation >= $1::DATE) 
+                 AND ($2::DATE IS NULL OR date_creation < ($2::DATE + INTERVAL '1 day'))`,
+                [debutFormate, finFormate]
             ),
+            // Comptage des citoyens à jour avec filtrage par date de création des propriétaires
+            // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
             pool.query(
                 `SELECT COUNT(DISTINCT p.id) FROM proprietaires p
-                 WHERE NOT EXISTS (
+                 WHERE ($1::DATE IS NULL OR p.date_creation >= $1::DATE) 
+                 AND ($2::DATE IS NULL OR p.date_creation < ($2::DATE + INTERVAL '1 day'))
+                 AND NOT EXISTS (
                      SELECT 1 FROM vehicules v 
                      WHERE v.proprietaire_id = p.id 
-                     AND (v.statut_assurance != 'VALIDE' OR v.statut_vignette != 'VALIDE' OR v.statut_visite_technique != 'VALIDE') -- CORRECTION FINALE
-                 );`
+                     AND (v.statut_assurance != 'VALIDE' OR v.statut_vignette != 'VALIDE' OR v.statut_visite_technique != 'VALIDE')
+                 )`,
+                [debutFormate, finFormate]
+            ),
+            // Calcul des revenus réels avec filtrage par date de paiement
+            // Logique robuste : >= debut ET < fin+1 jour pour inclure toute la journée même si debut=fin
+            pool.query(
+                "SELECT service, SUM(montant) as total FROM paiements WHERE ($1::DATE IS NULL OR date_paiement >= $1::DATE) AND ($2::DATE IS NULL OR date_paiement < ($2::DATE + INTERVAL '1 day')) GROUP BY service",
+                [debutFormate, finFormate]
+            ),
+            // =============================================
+            // ==      COMPTAGE DES VÉHICULES SIGNALÉS  ==
+            // =============================================
+            // Comptage des véhicules signalés par la police (VOLÉ ou EN FUITE)
+            // Nouveau KPI pour le tableau de bord : indicateur de sécurité routière
+            pool.query(
+                "SELECT COUNT(*) FROM vehicules WHERE statut_police = 'VOLÉ' OR statut_police = 'EN FUITE'"
             )
         ]);
+
+        // =============================================
+        // ==      CALCUL DES REVENUS RÉELS        ==
+        // =============================================
+        // Construction de l'objet des revenus réels depuis la base de données
+        // Initialisation avec des valeurs par défaut à 0 pour tous les services
+        const revenusReels = {
+            douane: 0,
+            ont: 0,
+            mairie: 0
+        };
+        
+        // Population de l'objet revenusReels avec les données réelles de la table paiements
+        // Gestion des cas où un service n'a encore aucun paiement (reste à 0)
+        revenusRes.rows.forEach(row => {
+            const serviceKey = row.service.toLowerCase();
+            if (serviceKey === 'douane') {
+                revenusReels.douane = parseInt(row.total);
+            } else if (serviceKey === 'ont') {
+                revenusReels.ont = parseInt(row.total);
+            } else if (serviceKey === 'mairie') {
+                revenusReels.mairie = parseInt(row.total);
+            }
+        });
 
         const stats = {
             totalVehicules: parseInt(totalVehiculesRes.rows[0].count),
             totalProprietaires: parseInt(totalProprietairesRes.rows[0].count),
             vehiculesAJour: parseInt(vehiculesAJourRes.rows[0].count),
             citoyensAJour: parseInt(citoyensAJourRes.rows[0].count),
+            // =============================================
+            // ==      NOUVEAU KPI : VÉHICULES SIGNALÉS  ==
+            // =============================================
+            // Indicateur de sécurité routière : nombre de véhicules signalés par la police
+            // Compte les véhicules avec statut_police = 'VOLÉ' ou 'EN FUITE'
+            vehiculesSignales: parseInt(vehiculesSignalesRes.rows[0].count),
             conformiteDocuments: {
                 carteGrise: parseInt(statutsRes.rows[0].carte_grise_valide),
                 assurance: parseInt(statutsRes.rows[0].assurance_valide),
                 vignette: parseInt(statutsRes.rows[0].vignette_valide),
                 visiteTechnique: parseInt(statutsRes.rows[0].visite_valide),
             },
-            revenusSimules: {
-                douane: 5420000,
-                mairie_vignettes: 12500000,
-                ont_cartes_grises: 21000000
-            }
+            revenusReels: revenusReels
         };
 
         res.json(stats);
@@ -556,6 +713,69 @@ app.get('/stats', async (req, res) => {
         console.error("ERREUR SUR LA ROUTE /stats:", err.message);
         res.status(500).send("Erreur du serveur lors du calcul des statistiques");
     }
+});
+
+// =====================================================================
+// ==                  ROUTES POUR LA GESTION DES PARAMÈTRES          ==
+// =====================================================================
+
+// =============================================
+// ==        CONSULTATION DES PARAMÈTRES     ==
+// =============================================
+// Récupérer tous les paramètres (prix des services) - Accès autorisé aux rôles pertinents
+// Les rôles Douane, Mairie, ONT et ETAT peuvent consulter les prix des services
+// Correction des permissions : inclusion des variantes de casse pour résoudre l'erreur 403
+// Support des rôles en majuscules et minuscules selon la configuration AWS Cognito
+app.get('/parametres', authorize(['Douane', 'Mairie', 'ONT', 'ETAT', 'douane', 'mairie', 'ont', 'etat']), async (req, res) => {
+  try {
+    // Récupération de tous les paramètres depuis la table parametres
+    // Permet aux services concernés de consulter les prix configurés dans le système
+    const parametres = await pool.query("SELECT * FROM parametres ORDER BY param_nom");
+    res.json(parametres.rows);
+  } catch (err) {
+    console.error('Erreur lors de la récupération des paramètres:', err.message);
+    res.status(500).send("Erreur du serveur lors de la récupération des paramètres");
+  }
+});
+
+// =============================================
+// ==      MODIFICATION DES PARAMÈTRES        ==
+// =============================================
+// Mettre à jour un paramètre spécifique (prix d'un service) - Accès restreint au rôle 'ETAT'
+// Seul l'État peut modifier les prix des services dans le système
+app.put('/parametres/:nom', authorize(['ETAT']), async (req, res) => {
+  try {
+    // Extraction du nom du paramètre depuis l'URL
+    const { nom } = req.params;
+    // Extraction de la nouvelle valeur depuis le corps de la requête
+    const { valeur } = req.body;
+    
+    // Validation de la présence de la valeur dans le corps de la requête
+    if (valeur === undefined || valeur === null) {
+      return res.status(400).json({ message: "La valeur du paramètre est requise" });
+    }
+    
+    // Mise à jour du paramètre dans la base de données
+    // Permet à l'État de modifier les prix des services (douane, carte grise, vignette)
+    const updateParametre = await pool.query(
+      "UPDATE parametres SET param_valeur = $1 WHERE param_nom = $2 RETURNING *",
+      [valeur, nom]
+    );
+    
+    // Vérification que le paramètre existe et a été mis à jour
+    if (updateParametre.rows.length === 0) {
+      return res.status(404).json({ message: "Paramètre non trouvé" });
+    }
+    
+    // Retour d'une réponse de succès avec les nouvelles données du paramètre
+    res.json({ 
+      message: `Paramètre '${nom}' mis à jour avec succès`, 
+      parametre: updateParametre.rows[0] 
+    });
+  } catch (err) {
+    console.error('Erreur lors de la mise à jour du paramètre:', err.message);
+    res.status(500).send("Erreur du serveur lors de la mise à jour du paramètre");
+  }
 });
 
 // ... (reste du fichier)

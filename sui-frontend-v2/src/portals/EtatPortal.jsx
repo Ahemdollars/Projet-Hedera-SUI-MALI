@@ -17,24 +17,67 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 function EtatPortal({ user, onSignOut }) {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    
+    // États pour les filtres de date
+    const [dateDebut, setDateDebut] = useState(''); // Date de début du filtre
+    const [dateFin, setDateFin] = useState('');     // Date de fin du filtre
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                // MODIFICATION : Utilisation de la variable API_URL
-                const response = await axios.get(`${API_URL}/stats`, {
-                    // Important : Envoyez le token d'authentification !
-                    headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` }
-                });
-                setStats(response.data);
-            } catch (error) {
-                console.error("Erreur lors de la récupération des stats", error);
-            } finally {
-                setLoading(false);
+    // Fonction pour récupérer les statistiques avec filtres de date optionnels
+    const fetchStats = async () => {
+        try {
+            // Logique pour le filtrage sur une seule journée
+            // Si seule la date de début est définie, on utilise la même date pour la fin
+            let effectiveDateFin = dateFin; // Utilise dateFin par défaut
+            if (dateDebut && !dateFin) { // Si debut est rempli mais fin est vide
+                effectiveDateFin = dateDebut; // Utilise debut comme date de fin aussi
             }
-        };
+
+            // Construction des paramètres de requête pour les filtres de date
+            const params = {};
+            if (dateDebut) {
+                params.debut = dateDebut; // Ajout du paramètre de début si défini
+            }
+            if (effectiveDateFin) {
+                params.fin = effectiveDateFin; // Ajout du paramètre de fin (réel ou calculé)
+            }
+
+            // Log pour déboguer les paramètres envoyés à l'API
+            console.log("Appel API /stats avec les paramètres :", params); // Log pour déboguer les dates envoyées
+            
+            // Appel API avec les paramètres de filtre et authentification
+            const response = await axios.get(`${API_URL}/stats`, {
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('token')}` },
+                params: params // Inclusion des paramètres de date dans la requête
+            });
+            setStats(response.data);
+        } catch (error) {
+            console.error("Erreur lors de la récupération des stats", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fonction pour réinitialiser les filtres de date
+    const handleResetDates = () => {
+        // Réinitialisation des états de date
+        setDateDebut('');
+        setDateFin('');
+        // Le rechargement se fera automatiquement via le useEffect qui dépend des dates
+    };
+
+    // Effet pour charger les statistiques au montage du composant
+    useEffect(() => {
         fetchStats();
-    }, []);
+    }, []); // Dépendances vides pour s'exécuter une seule fois au montage
+
+    // Effet pour recharger les statistiques lorsque les dates changent
+    useEffect(() => {
+        // Rechargement automatique des statistiques quand les dates changent
+        // Cela inclut la réinitialisation (quand les dates redeviennent vides)
+        if (dateDebut !== undefined || dateFin !== undefined) {
+            fetchStats();
+        }
+    }, [dateDebut, dateFin]); // Dépendances sur les états de date
 
     if (loading) {
         return <div>Chargement des statistiques...</div>;
@@ -44,17 +87,20 @@ function EtatPortal({ user, onSignOut }) {
         return <div>Impossible de charger les statistiques.</div>;
     }
 
-    // Préparation des données pour les graphiques
+    // Préparation des données pour le graphique des revenus par service
+    // MIGRATION : Passage de stats.revenusSimules vers stats.revenusReels
+    // Les revenus réels sont maintenant calculés directement depuis la base de données
     const revenusData = {
         labels: ['Douane', 'Mairie (Vignettes)', 'ONT (Cartes Grises)'],
         datasets: [{
             label: 'Revenus en Francs CFA',
+            // NOUVELLE STRUCTURE : Utilisation de stats.revenusReels avec les clés simplifiées
             data: [
-                stats.revenusSimules?.douane || 0,
-                stats.revenusSimules?.mairie_vignettes || 0,
-                stats.revenusSimules?.ont_cartes_grises || 0
+                stats.revenusReels?.douane || 0,        // Revenus réels de la douane (importations)
+                stats.revenusReels?.mairie || 0,       // Revenus réels de la mairie (vignettes)
+                stats.revenusReels?.ont || 0           // Revenus réels de l'ONT (cartes grises)
             ],
-            backgroundColor: ['#3e95cd', '#8e5ea2', '#3cba9f'],
+            backgroundColor: ['#3e95cd', '#8e5ea2', '#3cba9f'], // Couleurs distinctes par service
         }],
     };
 
@@ -69,6 +115,65 @@ function EtatPortal({ user, onSignOut }) {
             </header>
 
             <main className="portal-content">
+                {/* Section des filtres de date */}
+                <div style={{ 
+                    padding: '20px', 
+                    backgroundColor: '#f8f9fa', 
+                    border: '1px solid #dee2e6', 
+                    borderRadius: '8px',
+                    marginBottom: '20px'
+                }}>
+                    <h3>Filtres de Date</h3>
+                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            <label style={{ fontWeight: 'bold', color: '#2c3e50' }}>Date de début :</label>
+                            <input 
+                                type="date" 
+                                value={dateDebut} 
+                                onChange={(e) => setDateDebut(e.target.value)}
+                                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            <label style={{ fontWeight: 'bold', color: '#2c3e50' }}>Date de fin :</label>
+                            <input 
+                                type="date" 
+                                value={dateFin} 
+                                onChange={(e) => setDateFin(e.target.value)}
+                                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                            />
+                        </div>
+                        <button 
+                            onClick={fetchStats}
+                            style={{ 
+                                padding: '10px 20px', 
+                                backgroundColor: '#007bff', 
+                                color: 'white', 
+                                border: 'none', 
+                                borderRadius: '4px', 
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            Appliquer le filtre
+                        </button>
+                        <button 
+                            onClick={handleResetDates}
+                            style={{ 
+                                padding: '10px 20px', 
+                                backgroundColor: '#6c757d', 
+                                color: 'white', 
+                                border: 'none', 
+                                borderRadius: '4px', 
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            Réinitialiser
+                        </button>
+                    </div>
+                </div>
+
                 {/* Section des Indicateurs Clés (KPIs) */}
                 <div className="kpi-grid">
                     <div className="kpi-card">
@@ -86,6 +191,12 @@ function EtatPortal({ user, onSignOut }) {
                     <div className="kpi-card">
                         <span className="kpi-value">{stats.citoyensAJour}</span>
                         <span className="kpi-label">Citoyens en Règle</span>
+                    </div>
+                    
+                    {/* Nouvelle carte KPI pour les véhicules signalés (Volés ou En Fuite) */}
+                    <div className="kpi-card">
+                        <span className="kpi-value">{stats.vehiculesSignales || 0}</span>
+                        <span className="kpi-label">Véhicules Signalés</span>
                     </div>
                 </div>
 
