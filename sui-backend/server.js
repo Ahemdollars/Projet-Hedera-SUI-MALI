@@ -26,10 +26,10 @@ const port = 3001;
 // Créer un serveur HTTP à partir de l'application Express
 const server = http.createServer(app);
 
-// Initialiser Socket.IO pour la communication en temps réel
+// Configuration Socket.IO avec CORS pour la production
 const io = new Server(server, {
   cors: {
-    origin: "*", // Accepter toutes les origines
+    origin: "http://ec2-13-38-128-242.eu-west-3.compute.amazonaws.com",
     methods: ["GET", "POST"]
   }
 });
@@ -589,6 +589,30 @@ app.put('/police/vehicules/:plaque/statut-police', authorize(['Police']), async 
     // Permet aux autres modules (État, Douane, etc.) de voir les changements en temps réel
     req.io.emit('vehicle_updated', { plaque: plaque });
     
+    // =============================================
+    // ==      ALERTE TEMPS RÉEL EN FUITE         ==
+    // =============================================
+    // Vérifier si le nouveau statut est 'EN FUITE' pour déclencher une alerte
+    if (nouveau_statut === 'EN FUITE') {
+      // Récupération des informations complètes du véhicule depuis selectResult
+      const vehiculeMisAJour = selectResult.rows[0];
+      
+      // Préparation des données de l'alerte avec toutes les informations essentielles
+      const alerteData = {
+        plaque: vehiculeMisAJour.plaque_immatriculation,
+        marque: vehiculeMisAJour.marque,
+        modele: vehiculeMisAJour.modele,
+        couleur: vehiculeMisAJour.couleur,
+        message: `ALERTE : Véhicule ${vehiculeMisAJour.plaque_immatriculation} signalé EN FUITE.`
+      };
+      
+      // Émission de l'alerte à tous les clients connectés via WebSocket
+      req.io.emit('vehicule_en_fuite_alerte', alerteData);
+      
+      // Log serveur pour traçabilité et debugging
+      console.log(`[WebSocket] Alerte EN FUITE émise pour ${alerteData.plaque}`);
+    }
+    
     // Enregistrement de l'action sur la blockchain Hedera pour audit et traçabilité
     await logAction(`STATUT_POLICE_UPDATE: Plaque=${plaque}, Statut=${nouveau_statut}`);
     
@@ -880,10 +904,11 @@ app.get('/stats', async (req, res) => {
 // ==        CONSULTATION DES PARAMÈTRES     ==
 // =============================================
 // Récupérer tous les paramètres (prix des services) - Accès autorisé aux rôles pertinents
-// Les rôles Douane, Mairie, ONT et ETAT peuvent consulter les prix des services
+// Les rôles Douane, Mairie, ONT, Assurance, MTS et ETAT peuvent consulter les prix des services
 // Correction des permissions : inclusion des variantes de casse pour résoudre l'erreur 403
 // Support des rôles en majuscules et minuscules selon la configuration AWS Cognito
-app.get('/parametres', authorize(['Douane', 'Mairie', 'ONT', 'ETAT', 'douane', 'mairie', 'ont', 'etat']), async (req, res) => {
+// Ajout des rôles Assurance et MTS pour permettre la consultation des prix des services
+app.get('/parametres', authorize(['Douane', 'Mairie', 'ONT', 'Assurance', 'MTS', 'ETAT', 'douane', 'mairie', 'ont', 'assurance', 'mts', 'etat']), async (req, res) => {
   try {
     // Récupération de tous les paramètres depuis la table parametres
     // Permet aux services concernés de consulter les prix configurés dans le système

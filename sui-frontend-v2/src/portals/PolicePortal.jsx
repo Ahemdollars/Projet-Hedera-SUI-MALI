@@ -5,6 +5,9 @@ import './PolicePortal.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Initialisation du client socket à l'extérieur du composant
+const socket = io();
+
 function PolicePortal({ user, onSignOut }) {
   const [plaque, setPlaque] = useState('');
   const [searchResult, setSearchResult] = useState(null);
@@ -14,6 +17,9 @@ function PolicePortal({ user, onSignOut }) {
   // État pour gérer le chargement pendant la mise à jour du statut police
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [message, setMessage] = useState('');
+  
+  // État pour stocker l'alerte de véhicule en fuite reçue
+  const [alerte, setAlerte] = useState(null);
 
   // On utilise une "ref" pour garder une trace de la plaque recherchée,
   // accessible à tout moment par notre écouteur d'événements.
@@ -58,9 +64,27 @@ function PolicePortal({ user, onSignOut }) {
 
     // On se déconnecte quand l'utilisateur quitte la page.
     return () => {
+      // Suppression des écouteurs pour éviter les fuites mémoire
+      socket.off('vehicle_updated');
       socket.disconnect();
     };
   }, [isUpdatingStatus]); // Dépendance ajoutée pour éviter les race conditions
+
+  // useEffect dédié pour écouter les alertes de véhicules en fuite
+  useEffect(() => {
+    socket.on('vehicule_en_fuite_alerte', (data) => {
+      setAlerte(data);
+      // Auto-fermer l'alerte après 15 secondes
+      setTimeout(() => {
+        setAlerte(null);
+      }, 15000);
+    });
+
+    // Fonction de nettoyage
+    return () => {
+      socket.off('vehicule_en_fuite_alerte');
+    };
+  }, []); // Tableau de dépendances vide
 
   const fetchVehicleData = async (plaqueToFetch) => {
     // Protection : ne pas faire d'appel API si on est en train de faire une mise à jour manuelle
@@ -182,7 +206,28 @@ function PolicePortal({ user, onSignOut }) {
 
   return (
     <div className="portal-container">
-      <header className="portal-header">
+      {/* Bandeau d'alerte fixe en haut de l'écran */}
+      {alerte && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          backgroundColor: 'red',
+          color: 'white',
+          padding: '15px',
+          zIndex: 9999,
+          textAlign: 'center',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          borderBottom: '3px solid #cc0000'
+        }}>
+          🚨 ALERTE VÉHICULE EN FUITE 🚨 - Véhicule {alerte.plaque} ({alerte.marque} {alerte.modele}, {alerte.couleur}) signalé EN FUITE !
+        </div>
+      )}
+
+      <header className="portal-header" style={{ marginTop: alerte ? '100px' : '0' }}>
         <h1>Portail de la Police Nationale</h1>
         <div className="user-info">
           <span>Agent {user.username}</span>
