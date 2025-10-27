@@ -23,16 +23,25 @@ const { logAction } = require('./hedera');
 const app = express();
 const port = 3001;
 
+// Configuration CORS pour les origines autorisées
+const allowedOrigins = [
+  "http://ec2-13-38-128-242.eu-west-3.compute.amazonaws.com", // Production
+  "http://localhost:5173"  // Développement Vite
+];
+
 // Créer un serveur HTTP à partir de l'application Express
 const server = http.createServer(app);
 
-// Configuration Socket.IO avec CORS pour la production
+// Configuration Socket.IO avec CORS pour la production ET le développement
 const io = new Server(server, {
   cors: {
-    origin: "http://ec2-13-38-128-242.eu-west-3.compute.amazonaws.com",
+    origin: allowedOrigins,
     methods: ["GET", "POST"]
   }
 });
+
+// Log de débogage pour confirmer la configuration Socket.IO
+console.log('Socket.IO configuré avec CORS pour les origines:', allowedOrigins);
 
 // =============================================
 // ==              MIDDLEWARES                ==
@@ -97,7 +106,9 @@ function authorize(allowedRoles) {
 }
 
 // Activer CORS pour les requêtes HTTP classiques
-app.use(cors());
+app.use(cors({
+  origin: allowedOrigins
+}));
 // Permettre au serveur de comprendre le JSON
 app.use(express.json());
 // Rendre 'io' accessible dans toutes les routes pour pouvoir émettre des événements

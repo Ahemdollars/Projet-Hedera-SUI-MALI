@@ -3,10 +3,10 @@ import axios from 'axios';
 import io from 'socket.io-client';
 import './PolicePortal.css';
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-// Initialisation du client socket à l'extérieur du composant
-const socket = io();
+// Log de débogage pour vérifier que l'URL est correctement chargée
+console.log('Tentative de connexion du socket à :', API_URL);
 
 function PolicePortal({ user, onSignOut }) {
   const [plaque, setPlaque] = useState('');
@@ -40,51 +40,39 @@ function PolicePortal({ user, onSignOut }) {
     }
   };
 
+  // useEffect unique pour gérer TOUTE la logique du socket
   useEffect(() => {
-    // On établit la connexion au serveur WebSocket une seule fois.
+    // 1. CRÉER le socket ici, à l'intérieur du hook.
     const socket = io(API_URL);
+
+    // 2. Définir tous les listeners sur cette instance locale
     socket.on('connect', () => {
-      console.log('Connecté au serveur en temps réel.');
+      console.log('Connecté au serveur en temps réel. ID Socket:', socket.id);
     });
 
-    // On écoute les événements de mise à jour.
     socket.on('vehicle_updated', (data) => {
       console.log('Notification reçue pour la plaque :', data.plaque);
-      
-      // Si la plaque du message correspond à la plaque actuellement affichée...
+      // Utilise currentPlaqueRef.current pour obtenir la valeur actuelle de la ref
       if (currentPlaqueRef.current && data.plaque === currentPlaqueRef.current) {
         console.log('Mise à jour automatique de l\'affichage...');
-        // Correction : éviter le conflit avec les mises à jour manuelles
-        // On ne rafraîchit que si on n'est pas en train de faire une mise à jour manuelle
-        if (!isUpdatingStatus) {
-          fetchVehicleData(data.plaque);
-        }
+        fetchVehicleData(data.plaque);
       }
     });
 
-    // On se déconnecte quand l'utilisateur quitte la page.
-    return () => {
-      // Suppression des écouteurs pour éviter les fuites mémoire
-      socket.off('vehicle_updated');
-      socket.disconnect();
-    };
-  }, [isUpdatingStatus]); // Dépendance ajoutée pour éviter les race conditions
-
-  // useEffect dédié pour écouter les alertes de véhicules en fuite
-  useEffect(() => {
     socket.on('vehicule_en_fuite_alerte', (data) => {
+      console.log('ALERTE EN FUITE REÇUE:', data);
       setAlerte(data);
-      // Auto-fermer l'alerte après 15 secondes
-      setTimeout(() => {
-        setAlerte(null);
-      }, 15000);
+      setTimeout(() => setAlerte(null), 15000);
     });
 
-    // Fonction de nettoyage
+    // 3. Fonction de nettoyage
+    // Elle s'exécutera sur ce socket local et le détruira.
+    // Au remontage (en Strict Mode), un NOUVEAU socket sera créé.
     return () => {
-      socket.off('vehicule_en_fuite_alerte');
+      console.log('Nettoyage du socket : déconnexion et suppression des listeners.');
+      socket.disconnect();
     };
-  }, []); // Tableau de dépendances vide
+  }, []); // Le tableau vide `[]` est crucial.
 
   const fetchVehicleData = async (plaqueToFetch) => {
     // Protection : ne pas faire d'appel API si on est en train de faire une mise à jour manuelle
@@ -210,24 +198,25 @@ function PolicePortal({ user, onSignOut }) {
       {alerte && (
         <div style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          backgroundColor: 'red',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: '#D32F2F', // Rouge foncé
           color: 'white',
-          padding: '15px',
-          zIndex: 9999,
-          textAlign: 'center',
-          fontSize: '16px',
+          padding: '16px 24px',
+          borderRadius: '8px',
+          zIndex: 1000,
+          fontSize: '1.1rem',
           fontWeight: 'bold',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          borderBottom: '3px solid #cc0000'
+          boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+          border: '2px solid #B71C1C', // Bordure plus foncée
+          textAlign: 'center'
         }}>
-          🚨 ALERTE VÉHICULE EN FUITE 🚨 - Véhicule {alerte.plaque} ({alerte.marque} {alerte.modele}, {alerte.couleur}) signalé EN FUITE !
+          {alerte.message}
         </div>
       )}
 
-      <header className="portal-header" style={{ marginTop: alerte ? '100px' : '0' }}>
+      <header className="portal-header" style={{ marginTop: alerte ? '100px' : '20px' }}>
         <h1>Portail de la Police Nationale</h1>
         <div className="user-info">
           <span>Agent {user.username}</span>
