@@ -57,10 +57,7 @@ function PolicePortal({ user, onSignOut }) {
   // useEffect unique pour gérer TOUTE la logique du socket
   useEffect(() => {
     // 1. CRÉER le socket ici, à l'intérieur du hook.
-    // IMPORTANT: io() sans paramètre se connecte à la racine du domaine
-    // Le serveur Socket.IO et le client se trouveront automatiquement sur /socket.io/
-    // qui sera intercepté par notre location /socket.io/ dans Nginx
-    const socket = io();
+    const socket = io(API_URL);
 
     // 2. Charger la liste des véhicules signalés au montage
     fetchVehiculesSignales();
@@ -71,14 +68,16 @@ function PolicePortal({ user, onSignOut }) {
     });
 
     socket.on('vehicle_updated', (data) => {
-      console.log('Notification reçue pour la plaque :', data.plaque);
-      // Utilise currentPlaqueRef.current pour obtenir la valeur actuelle de la ref
+      console.log('Notification de mise à jour reçue pour la plaque :', data.plaque);
+
+      // Recharger la liste des véhicules signalés pour TOUT le monde (utilise les filtres courants)
+      fetchVehiculesSignales();
+
+      // Mettre à jour la vue de recherche si la plaque correspond
       if (currentPlaqueRef.current && data.plaque === currentPlaqueRef.current) {
-        console.log('Mise à jour automatique de l\'affichage...');
+        console.log('Mise à jour automatique de l\'affichage de la recherche...');
         fetchVehicleData(data.plaque);
       }
-      // Mettre à jour la liste des véhicules signalés en temps réel
-      fetchVehiculesSignales(filtreDateDebut, filtreDateFin);
     });
 
     socket.on('vehicule_en_fuite_alerte', (data) => {
@@ -139,10 +138,14 @@ function PolicePortal({ user, onSignOut }) {
     }
 
     try {
+      // Utiliser les filtres courants si non fournis
+      const effectiveDebut = debut ?? filtreDateDebut;
+      const effectiveFin = fin ?? filtreDateFin;
+
       // Construit les paramètres de requête pour les dates
       const params = new URLSearchParams();
-      if (debut) params.append('dateDebut', debut);
-      if (fin) params.append('dateFin', fin);
+      if (effectiveDebut) params.append('dateDebut', effectiveDebut);
+      if (effectiveFin) params.append('dateFin', effectiveFin);
 
       const response = await axios.get(`${API_URL}/police/vehicules/signales`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -269,7 +272,7 @@ function PolicePortal({ user, onSignOut }) {
           color: 'white',
           padding: '16px 24px',
           borderRadius: '8px',
-          zIndex: 1000,
+          zIndex: 3000,
           fontSize: '1.1rem',
           fontWeight: 'bold',
           boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
