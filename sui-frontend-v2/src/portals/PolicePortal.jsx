@@ -57,7 +57,10 @@ function PolicePortal({ user, onSignOut }) {
   // useEffect unique pour gérer TOUTE la logique du socket
   useEffect(() => {
     // 1. CRÉER le socket ici, à l'intérieur du hook.
-    const socket = io(API_URL);
+    // IMPORTANT: io() sans paramètre se connecte à la racine du domaine
+    // Le serveur Socket.IO et le client se trouveront automatiquement sur /socket.io/
+    // qui sera intercepté par notre location /socket.io/ dans Nginx
+    const socket = io();
 
     // 2. Charger la liste des véhicules signalés au montage
     fetchVehiculesSignales();
