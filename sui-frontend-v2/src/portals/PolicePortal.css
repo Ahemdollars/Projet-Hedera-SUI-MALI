@@ -106,3 +106,30 @@
 .action-buttons button { padding: 10px 15px; border-radius: 5px; border: none; color: white; cursor: pointer; font-weight: bold; }
 .action-buttons button:not(.danger) { background-color: #28a745; }
 .action-buttons button.danger { background-color: #dc3545; }
+
+/* Styles pour la Modal */
+.modal-backdrop {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center; z-index: 2000;
+}
+.modal-content {
+  background: white; padding: 25px; border-radius: 8px;
+  width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+.modal-content h3 { margin-top: 0; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+/* Styles pour la nouvelle table */
+.widget-signales { margin-top: 30px; }
+.table-signales { width: 100%; border-collapse: collapse; margin-top: 15px; }
+.table-signales th, .table-signales td {
+  border: 1px solid #ddd; padding: 10px; text-align: left;
+}
+.table-signales th { background-color: #f4f4f4; }
+.table-signales tr:nth-child(even) { background-color: #f9f9f9; }
+.table-signales .status {
+  padding: 3px 6px; border-radius: 4px; color: white; font-weight: bold;
+}
+/* Correction pour "EN FUITE" */
+.table-signales .status.VOLÉ, .table-signales .status.EN\.FUITE { background-color: #D32F2F; }

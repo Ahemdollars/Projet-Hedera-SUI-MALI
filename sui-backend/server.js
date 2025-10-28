@@ -77,6 +77,10 @@ function authorize(allowedRoles) {
       // Utilisation de jwtDecode (destructuré depuis l'import) pour la compatibilité CommonJS
       const payload = jwtDecode(token);
       
+      // Extraction du nom d'utilisateur Cognito depuis le payload
+      // Fallback sur 'system' si aucune information n'est disponible
+      const username = payload['username'] || payload['cognito:username'] || 'system';
+      
       // Extraction des groupes/rôles de l'utilisateur depuis le payload Cognito
       // Si 'cognito:groups' n'existe pas, on utilise un tableau vide
       const userGroups = payload['cognito:groups'] || [];
@@ -86,6 +90,10 @@ function authorize(allowedRoles) {
       const hasPermission = userGroups.some(role => allowedRoles.includes(role));
       
       if (hasPermission) {
+        // Attacher les infos utilisateur à la requête pour usage ultérieur
+        req.user = { 
+          username: username
+        };
         // L'utilisateur a les permissions nécessaires, on passe au middleware suivant
         next();
       } else {
@@ -552,8 +560,11 @@ app.put('/police/vehicules/:plaque/statut-police', authorize(['Police']), async 
     // Extraction de la plaque d'immatriculation depuis les paramètres de l'URL
     const { plaque } = req.params;
     
-    // Extraction du nouveau statut depuis le corps de la requête
-    const { nouveau_statut } = req.body;
+    // Extraction du nouveau statut et de la description depuis le corps de la requête
+    const { nouveau_statut, description } = req.body;
+    
+    // Récupération du nom d'utilisateur de l'agent (injecté par le middleware authorize)
+    const agent_username = req.user.username;
     
     // Validation du statut reçu contre la liste des statuts autorisés pour la Police
     if (!validStatutPolice.includes(nouveau_statut)) {
@@ -562,11 +573,16 @@ app.put('/police/vehicules/:plaque/statut-police', authorize(['Police']), async 
       });
     }
     
-    // Mise à jour du statut police dans la base de données
-    // Met à jour la colonne statut_police et la date de modification
+    // Préparation des valeurs pour les nouvelles colonnes selon la logique métier
+    // Si le statut est "NORMAL" ou "INTERCEPTÉ", on efface les notes et l'agent
+    const newNote = (nouveau_statut === 'EN FUITE' || nouveau_statut === 'VOLÉ') ? description : null;
+    const agentSignaleur = (nouveau_statut === 'EN FUITE' || nouveau_statut === 'VOLÉ') ? agent_username : null;
+    
+    // Mise à jour du statut police et des nouvelles colonnes dans la base de données
+    // Met à jour statut_police, police_notes, police_signaled_by et la date de modification
     const update = await pool.query(
-      "UPDATE vehicules SET statut_police = $1, date_modification = CURRENT_TIMESTAMP WHERE plaque_immatriculation = $2 RETURNING *",
-      [nouveau_statut, plaque]
+      "UPDATE vehicules SET statut_police = $1, police_notes = $2, police_signaled_by = $3, date_modification = CURRENT_TIMESTAMP WHERE plaque_immatriculation = $4 RETURNING *",
+      [nouveau_statut, newNote, agentSignaleur, plaque]
     );
     
     // Vérification que le véhicule existe et a été mis à jour
@@ -614,7 +630,10 @@ app.put('/police/vehicules/:plaque/statut-police', authorize(['Police']), async 
         marque: vehiculeMisAJour.marque,
         modele: vehiculeMisAJour.modele,
         couleur: vehiculeMisAJour.couleur,
-        message: `ALERTE : Véhicule ${vehiculeMisAJour.plaque_immatriculation} signalé EN FUITE.`
+        message: `ALERTE : Véhicule ${vehiculeMisAJour.plaque_immatriculation} signalé EN FUITE.`,
+        // Ajout de la description et de l'agent à l'alerte WebSocket
+        description: newNote,
+        agent: agentSignaleur
       };
       
       // Émission de l'alerte à tous les clients connectés via WebSocket
@@ -641,6 +660,47 @@ app.put('/police/vehicules/:plaque/statut-police', authorize(['Police']), async 
   }
 });
 
+
+// Route pour récupérer tous les véhicules activement signalés (VOLÉ ou EN FUITE) avec filtres
+app.get('/police/vehicules/signales', authorize(['Police']), async (req, res) => {
+  try {
+    // Récupérer les filtres optionnels de date (YYYY-MM-DD)
+    const { dateDebut, dateFin } = req.query;
+
+    let queryParams = [];
+    let whereClauses = ["(statut_police = 'EN FUITE' OR statut_police = 'VOLÉ')"];
+
+    // Construire la requête de filtre de date
+    if (dateDebut) {
+      queryParams.push(dateDebut);
+      whereClauses.push(`date_modification >= $${queryParams.length}`);
+    }
+    if (dateFin) {
+      queryParams.push(dateFin);
+      // On inclut toute la journée de la date de fin
+      whereClauses.push(`date_modification < ($${queryParams.length}::date + interval '1 day')`);
+    }
+
+    const query = `
+      SELECT 
+        plaque_immatriculation, 
+        marque, 
+        modele, 
+        couleur, 
+        statut_police, 
+        date_modification, 
+        police_notes, 
+        police_signaled_by
+      FROM vehicules
+      WHERE ${whereClauses.join(' AND ')}
+      ORDER BY date_modification DESC
+    `;
+
+    const vehiculesSignales = await pool.query(query, queryParams);
+
+    res.json(vehiculesSignales.rows);
+
+  } catch (err) { console.error("Erreur lors de la récupération des véhicules signalés:", err.message); res.status(500).send("Erreur du serveur"); } });
 
 // =====================================================================
 // ==                  ROUTES POUR LE TABLEAU DE BORD DE L'ÉTAT       ==

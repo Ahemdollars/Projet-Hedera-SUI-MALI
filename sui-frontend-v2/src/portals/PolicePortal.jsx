@@ -21,6 +21,20 @@ function PolicePortal({ user, onSignOut }) {
   // État pour stocker l'alerte de véhicule en fuite reçue
   const [alerte, setAlerte] = useState(null);
 
+  // États pour la nouvelle liste de véhicules signalés
+  const [vehiculesSignales, setVehiculesSignales] = useState([]);
+  const [loadingSignales, setLoadingSignales] = useState(false);
+  const [erreurSignales, setErreurSignales] = useState('');
+
+  // États pour les filtres de date
+  const [filtreDateDebut, setFiltreDateDebut] = useState('');
+  const [filtreDateFin, setFiltreDateFin] = useState('');
+
+  // États pour la boîte de dialogue (modal) de signalement
+  const [modalVisible, setModalVisible] = useState(false);
+  const [statutEnCours, setStatutEnCours] = useState(''); // (ex: 'VOLÉ' ou 'EN FUITE')
+  const [descriptionNote, setDescriptionNote] = useState('');
+
   // On utilise une "ref" pour garder une trace de la plaque recherchée,
   // accessible à tout moment par notre écouteur d'événements.
   const currentPlaqueRef = useRef(null);
@@ -48,7 +62,10 @@ function PolicePortal({ user, onSignOut }) {
     // qui sera intercepté par notre location /socket.io/ dans Nginx
     const socket = io();
 
-    // 2. Définir tous les listeners sur cette instance locale
+    // 2. Charger la liste des véhicules signalés au montage
+    fetchVehiculesSignales();
+
+    // 3. Définir tous les listeners sur cette instance locale
     socket.on('connect', () => {
       console.log('Connecté au serveur en temps réel. ID Socket:', socket.id);
     });
@@ -60,6 +77,8 @@ function PolicePortal({ user, onSignOut }) {
         console.log('Mise à jour automatique de l\'affichage...');
         fetchVehicleData(data.plaque);
       }
+      // Mettre à jour la liste des véhicules signalés en temps réel
+      fetchVehiculesSignales(filtreDateDebut, filtreDateFin);
     });
 
     socket.on('vehicule_en_fuite_alerte', (data) => {
@@ -68,7 +87,7 @@ function PolicePortal({ user, onSignOut }) {
       setTimeout(() => setAlerte(null), 15000);
     });
 
-    // 3. Fonction de nettoyage
+    // 4. Fonction de nettoyage
     // Elle s'exécutera sur ce socket local et le détruira.
     // Au remontage (en Strict Mode), un NOUVEAU socket sera créé.
     return () => {
@@ -107,6 +126,39 @@ function PolicePortal({ user, onSignOut }) {
     }
   };
 
+  // Fonction pour charger la liste des véhicules signalés
+  const fetchVehiculesSignales = async (debut, fin) => {
+    setLoadingSignales(true);
+    setErreurSignales('');
+    
+    const token = sessionStorage.getItem('token');
+    if (!token) {
+      setErreurSignales("Session expirée. Veuillez vous reconnecter.");
+      setLoadingSignales(false);
+      return;
+    }
+
+    try {
+      // Construit les paramètres de requête pour les dates
+      const params = new URLSearchParams();
+      if (debut) params.append('dateDebut', debut);
+      if (fin) params.append('dateFin', fin);
+
+      const response = await axios.get(`${API_URL}/police/vehicules/signales`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        params: params
+      });
+
+      setVehiculesSignales(response.data);
+
+    } catch (err) {
+      console.error('Erreur fetchVehiculesSignales:', err);
+      setErreurSignales("Impossible de charger la liste des véhicules signalés.");
+    } finally {
+      setLoadingSignales(false);
+    }
+  };
+
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!plaque) return;
@@ -128,8 +180,15 @@ function PolicePortal({ user, onSignOut }) {
     }
   };
 
+  // Fonction pour ouvrir la boîte de dialogue de signalement
+  const ouvrirModalSignalement = (statut) => {
+    setStatutEnCours(statut);
+    setDescriptionNote(''); // Réinitialiser le champ
+    setModalVisible(true);
+  };
+
   // Fonction pour mettre à jour le statut police d'un véhicule
-  const handleUpdateStatusPolice = async (newStatus) => {
+  const handleUpdateStatusPolice = async (newStatus, description = '') => {
     setIsUpdatingStatus(true);
     setMessage('');
 
@@ -144,7 +203,8 @@ function PolicePortal({ user, onSignOut }) {
     try {
       // Appel API pour mettre à jour le statut police avec authentification
       const response = await axios.put(`${API_URL}/police/vehicules/${searchResult.plaque_immatriculation}/statut-police`, {
-        nouveau_statut: newStatus
+        nouveau_statut: newStatus,
+        description: description
       }, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -192,6 +252,7 @@ function PolicePortal({ user, onSignOut }) {
       setMessage(`Erreur lors de la mise à jour du statut : ${err.response?.data?.message || 'Erreur de communication avec le serveur.'}`);
     } finally {
       setIsUpdatingStatus(false);
+      if (newStatus === 'VOLÉ' || newStatus === 'EN FUITE') setModalVisible(false);
     }
   };
 
@@ -216,6 +277,35 @@ function PolicePortal({ user, onSignOut }) {
           textAlign: 'center'
         }}>
           {alerte.message}
+        </div>
+      )}
+
+      {/* Modal pour ajouter une description */}
+      {modalVisible && (
+        <div className="modal-backdrop">
+          <div className="modal-content">
+            <h3>Signaler Véhicule : {statutEnCours}</h3>
+            <p>Veuillez ajouter une description pour ce signalement :</p>
+            <textarea
+              rows="4"
+              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+              value={descriptionNote}
+              onChange={(e) => setDescriptionNote(e.target.value)}
+              placeholder="Motif, dernier lieu vu, informations pertinentes..."
+            />
+            <div className="modal-actions">
+              <button onClick={() => setModalVisible(false)} className="action-btn normal-btn" disabled={isUpdatingStatus}>
+                Annuler
+              </button>
+              <button 
+                onClick={() => handleUpdateStatusPolice(statutEnCours, descriptionNote)} 
+                className="action-btn fugitive-btn"
+                disabled={isUpdatingStatus}
+              >
+                {isUpdatingStatus ? 'Envoi...' : 'Confirmer Signalement'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -299,7 +389,7 @@ function PolicePortal({ user, onSignOut }) {
               <div className="action-buttons">
                 {searchResult.statut_police !== 'VOLÉ' && (
                   <button 
-                    onClick={() => handleUpdateStatusPolice('VOLÉ')} 
+                    onClick={() => ouvrirModalSignalement('VOLÉ')} 
                     disabled={isUpdatingStatus}
                     className="action-btn stolen-btn"
                   >
@@ -308,7 +398,7 @@ function PolicePortal({ user, onSignOut }) {
                 )}
                 {searchResult.statut_police !== 'EN FUITE' && (
                   <button 
-                    onClick={() => handleUpdateStatusPolice('EN FUITE')} 
+                    onClick={() => ouvrirModalSignalement('EN FUITE')} 
                     disabled={isUpdatingStatus}
                     className="action-btn fugitive-btn"
                   >
@@ -340,6 +430,59 @@ function PolicePortal({ user, onSignOut }) {
         
         {/* Affichage des messages de confirmation ou d'erreur */}
         {message && <p className="message">{message}</p>}
+
+        {/* Section de la liste des véhicules signalés */}
+        <div className="widget-signales results-widget">
+          <h2>Véhicules Activement Signalés</h2>
+
+          {/* Filtres de date */}
+          <div className="filtres-date" style={{ display: 'flex', gap: '10px', marginBottom: '15px', alignItems: 'center' }}>
+            <label>Du:</label>
+            <input type="date" value={filtreDateDebut} onChange={(e) => setFiltreDateDebut(e.target.value)} />
+            <label>Au:</label>
+            <input type="date" value={filtreDateFin} onChange={(e) => setFiltreDateFin(e.target.value)} />
+            <button onClick={() => fetchVehiculesSignales(filtreDateDebut, filtreDateFin)} className="action-btn" disabled={loadingSignales}>
+              {loadingSignales ? 'Filtrage...' : 'Filtrer'}
+            </button>
+            <button onClick={() => { setFiltreDateDebut(''); setFiltreDateFin(''); fetchVehiculesSignales(null, null); }} className="action-btn normal-btn" disabled={loadingSignales}>
+              Réinitialiser
+            </button>
+          </div>
+
+          {erreurSignales && <p className="error-message">{erreurSignales}</p>}
+
+          {/* Tableau des résultats */}
+          <table className="table-signales">
+            <thead>
+              <tr>
+                <th>Plaque</th>
+                <th>Statut</th>
+                <th>Infos Véhicule</th>
+                <th>Signalé le</th>
+                <th>Agent</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingSignales ? (
+                <tr><td colSpan="6">Chargement...</td></tr>
+              ) : vehiculesSignales.length === 0 ? (
+                <tr><td colSpan="6">Aucun véhicule signalé trouvé pour les filtres sélectionnés.</td></tr>
+              ) : (
+                vehiculesSignales.map((v) => (
+                  <tr key={v.plaque_immatriculation}>
+                    <td>{v.plaque_immatriculation}</td>
+                    <td><span className={`status ${v.statut_police.replace(' ', '.')}`}>{v.statut_police}</span></td>
+                    <td>{v.marque} {v.modele} ({v.couleur})</td>
+                    <td>{new Date(v.date_modification).toLocaleString('fr-FR')}</td>
+                    <td>{v.police_signaled_by || 'N/A'}</td>
+                    <td style={{ maxWidth: '300px' }}>{v.police_notes || 'N/A'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </main>
     </div>
   );
