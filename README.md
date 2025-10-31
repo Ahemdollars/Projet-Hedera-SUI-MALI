@@ -91,8 +91,9 @@ Vous trouverez la présentation visuelle du projet, qui résume le problème, la
 
 Afin de valider l'expertise technique du porteur de projet, voici les liens vers les certifications pertinentes.
 
-* **Lien Certification 1 (ex: AWS) :** `https://certs.hashgraphdev.com/a69b633f-ff0d-4bb4-8c09-68e3c9c28887.pdf`
-* **Lien Certification 2 (ex: Hedera) :** `https://certs.hashgraphdev.com/0a0f9fc6-e78d-45b5-9ac3-951eaef29f13.pdf`
+* **Lien Certification 1 :** `https://certs.hashgraphdev.com/a69b633f-ff0d-4bb4-8c09-68e3c9c28887.pdf`
+* **Lien Certification 2 :** `https://certs.hashgraphdev.com/0a0f9fc6-e78d-45b5-9ac3-951eaef29f13.pdf`
+* **Lien Certification 3 :** `https://certs.hashgraphdev.com/c8263c53-3e67-4bc1-93df-7ca658a9db48.pdf`
 
 
 ---
