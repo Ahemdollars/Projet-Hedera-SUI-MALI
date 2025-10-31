@@ -1,29 +1,33 @@
 # Projet SIU-Mali (Système d'Information Unifié)
 
-> **Candidature au Concours d'HEDERA**
+> **Candidature au Concours de Plan d’Affaires (AES 2025) & au Hackathon Hedera**
 
-Ce dépôt contient le code source d'un prototype fonctionnel (Proof-of-Concept) du SIU-Mali.
+Ce dépôt contient le code source d'un prototype fonctionnel (Proof-of-Concept) du SIU-Mali, une plateforme GovTech de modernisation pour la gestion du parc automobile au Mali.
 
-## 1. LIEN DE LA DÉMONSTRATION EN LIGNE (Test du Jury)
+---
+
+## SECTION 1 : POUR LE JURY DU CONCOURS AES 2025 (Démo)
+
+### 1.1 Lien de la Démonstration en Ligne
 
 Pour tester l'application en direct, veuillez utiliser le lien suivant. Il n'y a **rien à installer**.
 
 **Lien de la Démo :** **[http://ec2-13-38-128-242.eu-west-3.compute.amazonaws.com/](http://ec2-13-38-128-242.eu-west-3.compute.amazonaws.com/)**
 
-## 2. COMPTES DE DÉMONSTRATION
+### 1.2 Comptes de Démonstration
 
-L'application utilise une authentification sécurisée (AWS Cognito) avec des portails basés sur les rôles. Veuillez utiliser les identifiants suivants pour tester chaque portail.
+L'application utilise des portails basés sur les rôles. Veuillez utiliser les identifiants suivants pour tester.
 
 **Mot de passe commun (provisoire) :** `Password123!`
 
 ---
 
-### Portail 1 : Police Nationale
+### Portail 1 : Police Nationale (Rôle central)
 * **Nom d'utilisateur :** `P007`
 * **Mot de passe :** `Password123!`
 * **Fonctionnalités à tester :**
     1.  **Rechercher** un véhicule (ex: `AW-1111-AW`).
-    2.  **Consulter** les statuts de tous les services (Vignette, Assurance, etc.).
+    2.  **Consulter** les statuts de *tous* les autres services.
     3.  **Signaler** un véhicule ("EN FUITE" ou "VOLÉ") et **ajouter une description**.
     4.  **Consulter** la "Liste des Véhicules Activement Signalés" en bas de page.
 
@@ -39,35 +43,63 @@ L'application utilise une authentification sécurisée (AWS Cognito) avec des po
 
 ---
 
-### Portail 3 : Douane
+### Portail 3 : Douane (Point d'entrée)
 * **Nom d'utilisateur :** `D001`
 * **Mot de passe :** `Password123!`
 * **Fonctionnalités à tester :**
-    1.  **Enregistrer** un nouveau véhicule dans le système (ex: `XX-1234-XX`).
+    1.  **Enregistrer** un nouveau véhicule dans le système (ex: `YY-5678-ZZ`).
 
 ---
 
-### Portail 4 : Services (Mairie, ONT, etc.)
+### Portail 4 : Mairie (Vignette)
 * **Nom d'utilisateur :** `MAIRIE001`
 * **Mot de passe :** `Password123!`
-* **Fonctionnalités à tester :**
-    1.  **Rechercher** un véhicule.
-    2.  **Mettre à jour** le statut d'un document (ex: marquer la "Vignette" comme "VALIDE").
+* **Test :** Rechercher un véhicule (ex: `AW-1111-AW`) et marquer la "Vignette" comme "VALIDE".
 
-## 3. DESCRIPTION DU PROJET
+---
 
-Le SIU-Mali est un système d'information centralisé conçu pour résoudre la fragmentation des données des véhicules au Mali. Il connecte plus de 6 agences (Police, Douane, Mairie, ONT, MTS, Assurances) sur une plateforme unique, sécurisée et en temps réel.
+### Portail 5 : ONT (Carte Grise)
+* **Nom d'utilisateur :** `ONT001`
+* **Mot de passe :** `Password123!`
+* **Test :** Rechercher un véhicule et marquer la "Carte Grise" comme "VALIDE".
 
-## 4. OBJECTIFS CLÉS
+---
 
-* **Réduire la fraude documentaire** (fausses cartes grises, assurances).
-* **Améliorer la sécurité routière** (alertes "EN FUITE" en temps réel).
-* **Augmenter et sécuriser les revenus de l'État** (traçabilité des paiements).
-* **Garantir la transparence** grâce à une piste d'audit immuable (Hedera Hashgraph).
+### Portail 6 : MTS (Visite Technique)
+* **Nom d'utilisateur :** `ONT001`
+* **Mot de passe :** `Password123!`
+* **Test :** Rechercher un véhicule et marquer la "Visite Technique" comme "VALIDE".
 
-## 5. STACK TECHNIQUE (POUR INFORMATION)
+---
 
-* **Audit Trail :** Hedera Consensus Service (HCS)
+### Portail 7 : Assurance
+* **Nom d'utilisateur :** `ASSUR001`
+* **Mot de passe :** `Password123!`
+* **Test :** Rechercher un véhicule et marquer "l'Assurance" comme "VALIDE".
+
+---
+
+## SECTION 2 : POUR LE JURY DU HACKATHON HEDERA (Technique)
+
+### 2.1 Pitch Deck (Présentation du Projet)
+
+Vous trouverez la présentation visuelle du projet, qui résume le problème, la solution et l'innovation (y compris notre usage de Hedera) sur le lien ci-dessous.
+
+* **Lien vers le Pitch Deck :** `https://drive.google.com/drive/folders/1x8qeMZ7EsETjOzxKjv845FvPzQPvNbfA?usp=drive_link`
+
+### 2.2 Liens de Certification:
+
+Afin de valider l'expertise technique du porteur de projet, voici les liens vers les certifications pertinentes.
+
+* **Lien Certification 1 (ex: AWS) :** `https://certs.hashgraphdev.com/a69b633f-ff0d-4bb4-8c09-68e3c9c28887.pdf`
+* **Lien Certification 2 (ex: Hedera) :** `https://certs.hashgraphdev.com/0a0f9fc6-e78d-45b5-9ac3-951eaef29f13.pdf`
+
+
+---
+
+## 3. DESCRIPTION TECHNIQUE (POUR INFORMATION)
+
+* **Audit Trail :** **Hedera Consensus Service (HCS)** - Chaque action critique est hachée et enregistrée sur Hedera pour une traçabilité immuable.
 * **Frontend :** React.js (avec Vite)
 * **Backend :** Node.js / Express.js
 * **Base de Données :** PostgreSQL (hébergé sur AWS RDS)
